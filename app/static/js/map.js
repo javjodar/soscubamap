@@ -6,6 +6,7 @@ let searchBox;
 let autocomplete;
 let searchMarker;
 let geocoder;
+let isAdmin = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   const filters = document.querySelector(".filters");
@@ -127,6 +128,13 @@ function renderMarkers(posts) {
           <div style="margin-top:8px;">
             <button id="reportLocationBtn" data-report-url="/reportar-ubicacion/${post.id}" style="background:#0f151a;border:1px solid #1f2a33;color:#6ee7b7;padding:6px 8px;border-radius:6px;cursor:pointer;">Reportar ubicación</button>
             <button id="viewHistoryBtn" data-history-url="/reporte/${post.id}/historial" style="margin-left:6px;background:#0f151a;border:1px solid #1f2a33;color:#9bd1ff;padding:6px 8px;border-radius:6px;cursor:pointer;">Ver historial</button>
+            <button id="verifyBtn-${post.id}" data-verify-id="${post.id}" style="margin-left:6px;background:#6ee7b7;border:none;color:#0b0f12;padding:6px 8px;border-radius:6px;cursor:pointer;">Verificar</button>
+            <span id="verifyCount-${post.id}" style="margin-left:6px;font-weight:700;color:#0b0f12;background:#6ee7b7;padding:4px 6px;border-radius:6px;">${post.verify_count ?? 0}</span>
+            ${
+              isAdmin
+                ? `<button id="editBtn-${post.id}" data-edit-url="/admin/reportes/${post.id}/editar" style="margin-left:6px;background:#0f151a;border:1px solid #1f2a33;color:#fff;padding:6px 8px;border-radius:6px;cursor:pointer;">Editar</button>`
+                : ""
+            }
           </div>
           ${post.address ? `<div style="font-size:12px;color:#666;">${post.address}</div>` : ""}
         </div>
@@ -150,6 +158,29 @@ function renderMarkers(posts) {
       if (historyBtn) {
         historyBtn.addEventListener("click", () => {
           const url = historyBtn.getAttribute("data-history-url");
+          if (!url) return;
+          if (window.openReportModal) {
+            window.openReportModal(url);
+          } else {
+            window.location.href = url;
+          }
+        });
+      }
+      const verifyBtn = document.getElementById(`verifyBtn-${post.id}`);
+      if (verifyBtn) {
+        verifyBtn.addEventListener("click", async () => {
+          const res = await fetch(`/api/posts/${post.id}/verify`, { method: "POST" });
+          const data = await res.json();
+          const countEl = document.getElementById(`verifyCount-${post.id}`);
+          if (countEl && typeof data.verify_count !== "undefined") {
+            countEl.textContent = data.verify_count;
+          }
+        });
+      }
+      const editBtn = document.getElementById(`editBtn-${post.id}`);
+      if (editBtn) {
+        editBtn.addEventListener("click", () => {
+          const url = editBtn.getAttribute("data-edit-url");
           if (!url) return;
           if (window.openReportModal) {
             window.openReportModal(url);
@@ -288,6 +319,7 @@ window.initMap = async function () {
   syncLegend();
   const mapEl = document.getElementById("map");
   const apiKey = mapEl.dataset.apiKey;
+  isAdmin = mapEl.dataset.isAdmin === "1";
   if (!apiKey) {
     refreshRecent();
     return;

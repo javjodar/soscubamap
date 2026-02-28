@@ -55,6 +55,7 @@
     data-api-key="{{ google_maps_api_key }}"
     data-map-id="{{ config.GOOGLE_MAPS_MAP_ID }}"
     data-new-url="{{ url_for('map.new_post') }}"
+    data-is-admin="{{ 1 if current_user.is_authenticated and current_user.has_role('administrador') else 0 }}"
   >
     <div class="map-placeholder">
       <div class="map-title">Google Maps</div>
