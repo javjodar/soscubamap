@@ -24,7 +24,7 @@
       <nav class="nav-links">
         <a href="{{ url_for('map.dashboard') }}">Mapa</a>
         {% if current_user.is_authenticated %}
-          <a href="{{ url_for('map.new_post') }}">Nuevo reporte</a>
+          <button class="btn-secondary" type="button" data-open-report data-url="{{ url_for('map.new_post') }}">Nuevo reporte</button>
           <a href="{{ url_for('map.about') }}">Acerca de</a>
           <a href="{{ url_for('map.donate') }}">Donar</a>
           {% if current_user.has_role('moderador') or current_user.has_role('administrador') %}
@@ -39,6 +39,7 @@
           <a href="{{ url_for('map.donate') }}">Donar</a>
           <a href="{{ url_for('auth.login') }}">Login</a>
           <a href="{{ url_for('auth.register') }}">Registro</a>
+          <button class="btn-cta" type="button" data-open-report data-url="{{ url_for('map.new_post') }}">Hacer reporte</button>
         {% endif %}
       </nav>
     </header>
@@ -60,5 +61,14 @@
     <footer class="site-footer">
       <div>Plataforma colaborativa y anonima.</div>
     </footer>
+
+    <div id="reportModal" class="modal-overlay" aria-hidden="true">
+      <div class="modal">
+        <button class="modal-close" type="button" data-close-report>&times;</button>
+        <iframe id="reportModalFrame" title="Nuevo reporte" class="modal-frame"></iframe>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
   </body>
 </html>

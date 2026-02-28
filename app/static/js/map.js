@@ -191,10 +191,13 @@ window.initMap = async function () {
     return;
   }
 
+  const isMobile = window.matchMedia("(max-width: 900px)").matches;
+  const baseZoom = isMobile ? 6 : 7;
+
   map = new google.maps.Map(mapEl, {
     center: { lat: 21.521757, lng: -77.781167 },
-    zoom: 7,
-    minZoom: 7,
+    zoom: baseZoom,
+    minZoom: baseZoom,
     mapId: mapEl.dataset.mapId || undefined,
     mapTypeId: "hybrid",
     tilt: 0,
@@ -268,7 +271,12 @@ window.initMap = async function () {
       const btn = document.getElementById("createReportBtn");
       if (btn) {
         btn.addEventListener("click", () => {
-          window.location.href = `${newUrl}?lat=${lat}&lng=${lng}`;
+          const targetUrl = `${newUrl}?lat=${lat}&lng=${lng}`;
+          if (window.openReportModal) {
+            window.openReportModal(targetUrl);
+          } else {
+            window.location.href = targetUrl;
+          }
         });
       }
     });
