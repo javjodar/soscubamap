@@ -29,6 +29,11 @@
     }
   };
 
+  window.onEditSubmitted = function () {
+    closeReportModal();
+    window.location.reload();
+  };
+
   document.querySelectorAll("[data-open-report]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const url = btn.getAttribute("data-url") || "/nuevo";

@@ -105,6 +105,19 @@ async function initReportCard(card) {
     });
   }
 
+  const editBtn = card.querySelector(".edit-btn");
+  if (editBtn) {
+    editBtn.addEventListener("click", () => {
+      const url = editBtn.getAttribute("data-edit-url");
+      if (!url) return;
+      if (window.openReportModal) {
+        window.openReportModal(url);
+      } else {
+        window.location.href = url;
+      }
+    });
+  }
+
   const form = card.querySelector(".comment-form");
   if (form) {
     form.addEventListener("submit", async (e) => {

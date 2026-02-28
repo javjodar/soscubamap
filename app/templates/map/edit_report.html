@@ -1,0 +1,97 @@
+{% extends "shared/base.html" %}
+{% block title %} | Editar reporte{% endblock %}
+{% block meta_description %}Edita y corrige reportes en #SOSCuba Map con transparencia total.{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Editar reporte</h1>
+  <p class="muted">Todas las ediciones quedan registradas en el historial público.</p>
+
+  <div class="draw-wrap">
+    <div class="draw-title">Dibuja o ajusta el área del reporte</div>
+    <div
+      id="drawMap"
+      class="draw-map"
+      data-api-key="{{ config.GOOGLE_MAPS_API_KEY }}"
+      data-map-id="{{ config.GOOGLE_MAPS_MAP_ID }}"
+      data-lat="{{ post.latitude }}"
+      data-lng="{{ post.longitude }}"
+      data-geojson="{{ post.polygon_geojson|default('')|e }}"
+    ></div>
+    <div class="draw-help">Usa polígono, rectángulo o círculo. Puedes editar el área antes de guardar.</div>
+  </div>
+
+  <form class="form-grid" method="post">
+    <label>
+      Título
+      <input type="text" name="title" value="{{ post.title }}" required />
+    </label>
+    <label>
+      Categoría
+      <select name="category_id" required>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}" {% if cat.id == post.category_id %}selected{% endif %}>{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Descripción
+      <textarea name="description" rows="6" required>{{ post.description }}</textarea>
+    </label>
+    <label>
+      Motivo de edición
+      <textarea name="edit_reason" rows="3" required placeholder="Explica por qué realizas este cambio."></textarea>
+    </label>
+    <div class="two-col">
+      <label>
+        Latitud
+        <input type="text" name="latitude" value="{{ post.latitude }}" required />
+      </label>
+      <label>
+        Longitud
+        <input type="text" name="longitude" value="{{ post.longitude }}" required />
+      </label>
+    </div>
+    <label>
+      Dirección
+      <input type="text" name="address" value="{{ post.address or '' }}" />
+    </label>
+    <div class="two-col">
+      <label>
+        Provincia
+        <input type="text" name="province" value="{{ post.province or '' }}" />
+      </label>
+      <label>
+        Municipio
+        <input type="text" name="municipality" value="{{ post.municipality or '' }}" />
+      </label>
+    </div>
+    <div class="links-group">
+      <div class="links-header">
+        <span>Enlaces de interés</span>
+        <button type="button" class="btn-secondary" id="addLinkBtn">+ Agregar</button>
+      </div>
+      <div id="linksList" class="links-list">
+        {% for link in links %}
+          <input type="url" name="links[]" value="{{ link }}" />
+        {% endfor %}
+        {% if links|length == 0 %}
+          <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
+        {% endif %}
+      </div>
+    </div>
+    <input type="hidden" name="polygon_geojson" id="polygonGeojson" value="{{ post.polygon_geojson or '' }}" />
+    <button type="submit" class="btn-primary">Enviar edición</button>
+  </form>
+
+  <div class="admin-section">
+    <a class="btn-secondary" href="{{ url_for('map.post_history', post_id=post.id) }}">Ver historial público</a>
+  </div>
+</section>
+
+<script src="{{ url_for('static', filename='js/edit_post.js') }}"></script>
+{% if config.GOOGLE_MAPS_API_KEY %}
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key={{ config.GOOGLE_MAPS_API_KEY }}&callback=initDrawMap&libraries=drawing&v=beta">
+</script>
+{% endif %}
+{% endblock %}

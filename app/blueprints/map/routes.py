@@ -11,6 +11,7 @@ from app.models.role import Role
 from app.models.site_setting import SiteSetting
 from app.models.location_report import LocationReport
 from app.models.post_revision import PostRevision
+from app.models.post_edit_request import PostEditRequest
 from app.services.cuba_locations import PROVINCES, MUNICIPALITIES
 from app.extensions import db
 from . import map_bp
@@ -154,6 +155,132 @@ def report_location(post_id):
             db.session.commit()
             submitted = True
     return render_template("map/report_location.html", post=post, submitted=submitted)
+
+
+def _get_or_create_anon_editor():
+    if current_user.is_authenticated:
+        return current_user
+    anon_user = User(email=f"anon+{secrets.token_hex(6)}@local")
+    anon_user.set_password(secrets.token_urlsafe(16))
+    anon_user.ensure_anon_code()
+    default_role = Role.query.filter_by(name="colaborador").first()
+    if default_role:
+        anon_user.roles.append(default_role)
+    db.session.add(anon_user)
+    db.session.flush()
+    return anon_user
+
+
+@map_bp.route("/reporte/<int:post_id>/editar", methods=["GET", "POST"])
+def edit_report_public(post_id):
+    post = Post.query.get_or_404(post_id)
+    categories = Category.query.order_by(Category.id.asc()).all()
+    links = []
+    if post.links_json:
+        try:
+            links = json.loads(post.links_json)
+        except Exception:
+            links = []
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        edit_reason = request.form.get("edit_reason", "").strip()
+        category_id = request.form.get("category_id")
+        latitude = request.form.get("latitude", "").strip()
+        longitude = request.form.get("longitude", "").strip()
+        address = request.form.get("address", "").strip()
+        province = request.form.get("province", "").strip()
+        municipality = request.form.get("municipality", "").strip()
+        polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        links_list = request.form.getlist("links[]")
+        links_list = [link.strip() for link in links_list if link.strip()]
+
+        if not title or not description or not category_id or not latitude or not longitude:
+            flash("Completa todos los campos obligatorios.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
+        if not edit_reason:
+            flash("El motivo de edición es obligatorio.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
+
+        try:
+            lat = Decimal(latitude)
+            lng = Decimal(longitude)
+        except Exception:
+            flash("Latitud/longitud inválidas.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
+
+        moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+        moderation_enabled = True
+        if moderation_setting:
+            moderation_enabled = moderation_setting.value == "true"
+
+        editor = _get_or_create_anon_editor()
+        editor_label = f"Anon-{editor.anon_code}" if editor and editor.anon_code else "Anon"
+
+        if moderation_enabled:
+            edit_req = PostEditRequest(
+                post_id=post.id,
+                editor_id=editor.id if editor else None,
+                editor_label=editor_label,
+                reason=edit_reason,
+                title=title,
+                description=description,
+                latitude=lat,
+                longitude=lng,
+                address=address or None,
+                province=province or None,
+                municipality=municipality or None,
+                category_id=int(category_id),
+                polygon_geojson=polygon_geojson or None,
+                links_json=json.dumps(links_list) if links_list else None,
+            )
+            db.session.add(edit_req)
+            db.session.commit()
+            payload = {"status": "pending"}
+            if request.args.get("modal") == "1":
+                return render_template("map/edit_success.html", payload=payload)
+            flash("Edición enviada a moderación.", "success")
+            return redirect(url_for("map.dashboard"))
+
+        # Sin moderación: aplicar directo y guardar revisión
+        revision = PostRevision(
+            post_id=post.id,
+            editor_id=editor.id if editor else None,
+            editor_label=editor_label,
+            reason=edit_reason,
+            title=post.title,
+            description=post.description,
+            latitude=post.latitude,
+            longitude=post.longitude,
+            address=post.address,
+            province=post.province,
+            municipality=post.municipality,
+            category_id=post.category_id,
+            polygon_geojson=post.polygon_geojson,
+            links_json=post.links_json,
+        )
+        db.session.add(revision)
+
+        post.title = title
+        post.description = description
+        post.category_id = int(category_id)
+        post.latitude = lat
+        post.longitude = lng
+        post.address = address or None
+        post.province = province or None
+        post.municipality = municipality or None
+        post.polygon_geojson = polygon_geojson or None
+        post.links_json = json.dumps(links_list) if links_list else None
+        db.session.commit()
+
+        payload = {"status": "approved"}
+        if request.args.get("modal") == "1":
+            return render_template("map/edit_success.html", payload=payload)
+        flash("Edición aplicada.", "success")
+        return redirect(url_for("map.dashboard"))
+
+    return render_template("map/edit_report.html", post=post, categories=categories, links=links)
 
 
 @map_bp.route("/reporte/<int:post_id>/historial")

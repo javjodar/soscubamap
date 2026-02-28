@@ -48,9 +48,7 @@
           <button class="btn-primary verify-btn" data-post-id="{{ post.id }}">Verificar</button>
           <span class="verify-count" id="verify-count-{{ post.id }}">{{ post.verify_count or 0 }}</span>
           <button class="btn-secondary" type="button" data-history-url="{{ url_for('map.post_history', post_id=post.id) }}">Historial</button>
-          {% if current_user.is_authenticated and current_user.has_role('administrador') %}
-            <a class="btn-secondary" href="{{ url_for('admin.edit_report', post_id=post.id) }}">Editar</a>
-          {% endif %}
+          <button class="btn-secondary edit-btn" type="button" data-edit-url="{{ url_for('map.edit_report_public', post_id=post.id) }}">Editar</button>
         </div>
         <div class="comments" data-post-id="{{ post.id }}">
           <div class="comment-list" id="comment-list-{{ post.id }}"></div>

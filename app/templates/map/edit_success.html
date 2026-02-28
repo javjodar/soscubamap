@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Edición enviada</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        const payload = {{ payload|tojson }};
+        if (window.parent && window.parent.onEditSubmitted) {
+          window.parent.onEditSubmitted(payload);
+        } else if (window.parent) {
+          window.parent.location.reload();
+        }
+      })();
+    </script>
+  </body>
+</html>

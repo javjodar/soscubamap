@@ -492,6 +492,51 @@ body {
   color: var(--accent-2);
 }
 
+.info-actions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.info-btn {
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  border: 1px solid #1f2a33;
+  background: #0f151a;
+  color: #e0e7ef;
+}
+
+.info-btn-outline {
+  background: #0f151a;
+}
+
+.info-btn-blue {
+  color: #9bd1ff;
+}
+
+.info-btn-solid {
+  background: #6ee7b7;
+  border: none;
+  color: #0b0f12;
+  font-weight: 700;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #6ee7b7;
+  color: #0b0f12;
+  font-weight: 700;
+  font-size: 12px;
+}
+
 .category-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
