@@ -171,6 +171,17 @@ body {
   padding: 16px;
 }
 
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filters.collapsed .filter-controls {
+  display: none;
+}
+
 .filter-title {
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -373,6 +384,13 @@ body {
   text-align: right;
   display: grid;
   gap: 6px;
+}
+
+.console-btn {
+  font-size: 11px;
+  padding: 6px 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .console-time {

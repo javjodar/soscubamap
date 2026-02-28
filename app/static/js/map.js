@@ -7,6 +7,18 @@ let autocomplete;
 let searchMarker;
 let geocoder;
 
+document.addEventListener("DOMContentLoaded", () => {
+  const filters = document.querySelector(".filters");
+  const toggle = document.getElementById("filtersToggle");
+  if (!filters || !toggle) return;
+
+  toggle.addEventListener("click", () => {
+    const isCollapsed = filters.classList.toggle("collapsed");
+    toggle.textContent = isCollapsed ? "Mostrar filtros" : "Ocultar filtros";
+    toggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+  });
+});
+
 const CATEGORY_ICONS = {
   "accion-represiva": "fa-hand-fist",
   "residencia-represor": "fa-house-chimney-user",
@@ -141,7 +153,7 @@ async function applyFilters() {
 }
 
 async function loadRecent() {
-  const res = await fetch("/api/posts?limit=6");
+  const res = await fetch("/api/posts?limit=8");
   return await res.json();
 }
 
@@ -166,11 +178,22 @@ function renderRecent(posts) {
           <div class="console-side">
             <div class="console-coords">${post.latitude.toFixed(4)}, ${post.longitude.toFixed(4)}</div>
             <div class="console-time">${post.created_at ? new Date(post.created_at).toLocaleString("es-ES") : ""}</div>
+            <button class="btn-secondary console-btn" data-pan-lat="${post.latitude}" data-pan-lng="${post.longitude}">Ver en mapa</button>
           </div>
         </div>
       `
     )
     .join("");
+
+  container.querySelectorAll("[data-pan-lat]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const lat = parseFloat(btn.getAttribute("data-pan-lat"));
+      const lng = parseFloat(btn.getAttribute("data-pan-lng"));
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !map) return;
+      map.panTo({ lat, lng });
+      map.setZoom(Math.max(map.getZoom(), 14));
+    });
+  });
 }
 
 async function refreshRecent() {
@@ -285,7 +308,7 @@ window.initMap = async function () {
   if (recentTimer) {
     clearInterval(recentTimer);
   }
-  recentTimer = setInterval(refreshRecent, 15000);
+  recentTimer = setInterval(refreshRecent, 8000);
 };
 
 function focusSearchResult(geometry, label) {
