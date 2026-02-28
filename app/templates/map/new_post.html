@@ -5,6 +5,12 @@
   <h1>Nuevo reporte</h1>
   <p>Todos los reportes se publican como anonimos. No necesitas cuenta para enviar. Los moderadores revisaran la informacion.</p>
 
+  <div class="draw-wrap">
+    <div class="draw-title">Dibuja el area del reporte (opcional)</div>
+    <div id="drawMap" class="draw-map" data-api-key="{{ config.GOOGLE_MAPS_API_KEY }}" data-map-id="{{ config.GOOGLE_MAPS_MAP_ID }}"></div>
+    <div class="draw-help">Usa el icono de poligono para dibujar. Puedes borrar y volver a dibujar.</div>
+  </div>
+
   <form class="form-grid" method="post">
     <label>
       Titulo
@@ -40,7 +46,15 @@
       Imagen (URL)
       <input type="text" name="image_url" />
     </label>
+    <input type="hidden" name="polygon_geojson" id="polygonGeojson" />
     <button type="submit" class="btn-primary">Enviar a moderacion</button>
   </form>
 </section>
+
+<script src="{{ url_for('static', filename='js/new_post.js') }}"></script>
+{% if config.GOOGLE_MAPS_API_KEY %}
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key={{ config.GOOGLE_MAPS_API_KEY }}&callback=initDrawMap&libraries=drawing&v=beta">
+</script>
+{% endif %}
 {% endblock %}

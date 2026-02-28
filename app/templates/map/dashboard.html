@@ -22,6 +22,10 @@
   <div class="filter-title">Filtros</div>
   <div class="filter-controls">
     <label>
+      Buscar direccion (Cuba)
+      <input id="mapSearch" type="text" placeholder="Ej: Vedado, La Habana" />
+    </label>
+    <label>
       Categoria
       <select id="categoryFilter">
         <option value="">Todas</option>
@@ -97,7 +101,7 @@
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 {% if google_maps_api_key %}
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker&v=beta">
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker,places&v=beta">
 </script>
 {% endif %}
 {% endblock %}

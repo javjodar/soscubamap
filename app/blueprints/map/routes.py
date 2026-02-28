@@ -33,6 +33,7 @@ def new_post():
         latitude = request.form.get("latitude", "").strip()
         longitude = request.form.get("longitude", "").strip()
         address = request.form.get("address", "").strip()
+        polygon_geojson = request.form.get("polygon_geojson", "").strip()
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
@@ -67,6 +68,7 @@ def new_post():
             latitude=lat,
             longitude=lng,
             address=address or None,
+            polygon_geojson=polygon_geojson or None,
             author_id=author_id,
         )
         db.session.add(post)

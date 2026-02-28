@@ -48,6 +48,7 @@ def posts():
                 "address": p.address,
                 "created_at": p.created_at.isoformat(),
                 "anon": f"Anon-{p.author.anon_code}" if p.author and p.author.anon_code else "Anon",
+                "polygon_geojson": p.polygon_geojson,
                 "category": {
                     "id": p.category.id,
                     "name": p.category.name,

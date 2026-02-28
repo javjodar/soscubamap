@@ -2,6 +2,8 @@ let map;
 let markers = [];
 let clickInfo;
 let recentTimer;
+let searchBox;
+let autocomplete;
 
 const CATEGORY_ICONS = {
   "accion-represiva": "fa-hand-fist",
@@ -84,6 +86,37 @@ function renderMarkers(posts) {
 
     marker.addListener("click", () => info.open({ anchor: marker, map }));
     markers.push(marker);
+
+    if (post.polygon_geojson) {
+      try {
+        const geo = JSON.parse(post.polygon_geojson);
+        if (geo && geo.type === "Polygon" && geo.coordinates?.length) {
+          const path = geo.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+          new google.maps.Polygon({
+            paths: path,
+            strokeColor: "#6ee7b7",
+            strokeOpacity: 0.7,
+            strokeWeight: 2,
+            fillColor: "#6ee7b7",
+            fillOpacity: 0.18,
+            map,
+          });
+        } else if (geo && geo.type === "Point" && geo.coordinates?.length && geo.radius_m) {
+          new google.maps.Circle({
+            center: { lat: geo.coordinates[1], lng: geo.coordinates[0] },
+            radius: geo.radius_m,
+            strokeColor: "#6ee7b7",
+            strokeOpacity: 0.7,
+            strokeWeight: 2,
+            fillColor: "#6ee7b7",
+            fillOpacity: 0.18,
+            map,
+          });
+        }
+      } catch (e) {
+        // ignore invalid geojson
+      }
+    }
   });
 }
 
@@ -163,6 +196,34 @@ window.initMap = async function () {
       { featureType: "water", elementType: "geometry", stylers: [{ color: "#0b2430" }] },
     ],
   });
+
+  const searchInput = document.getElementById("mapSearch");
+  if (searchInput && google.maps.places) {
+    const cubaBounds = new google.maps.LatLngBounds(
+      { lat: 19.8, lng: -85.2 },
+      { lat: 23.7, lng: -73.9 }
+    );
+    searchBox = new google.maps.places.SearchBox(searchInput, {
+      bounds: cubaBounds,
+    });
+    searchBox.setBounds(cubaBounds);
+    autocomplete = new google.maps.places.Autocomplete(searchInput, {
+      bounds: cubaBounds,
+      componentRestrictions: { country: "cu" },
+      fields: ["geometry", "name"],
+      types: ["geocode"],
+    });
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry || !place.geometry.location) return;
+      map.panTo(place.geometry.location);
+      map.setZoom(Math.max(map.getZoom(), 12));
+    });
+
+    map.addListener("bounds_changed", () => {
+      searchBox.setBounds(map.getBounds());
+    });
+  }
 
   await applyFilters();
   await refreshRecent();
