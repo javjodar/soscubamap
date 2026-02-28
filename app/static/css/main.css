@@ -200,7 +200,7 @@ body {
 }
 
 .map-canvas {
-  height: 460px;
+  height: 920px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: linear-gradient(135deg, #0e1419, #101b21);
@@ -990,5 +990,9 @@ textarea {
   .site-footer {
     padding-left: 24px;
     padding-right: 24px;
+  }
+
+  .map-canvas {
+    height: 460px;
   }
 }

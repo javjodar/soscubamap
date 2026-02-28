@@ -15,6 +15,7 @@
     />
   </head>
   <body>
+    {% if not request.args.get('modal') %}
     <header class="site-header">
       <a class="logo" href="{{ url_for('map.dashboard') }}">
         <img src="{{ url_for('static', filename='img/favico.png') }}" alt="#SOSCuba Map" class="logo-mark" />
@@ -45,6 +46,7 @@
         {% endif %}
       </nav>
     </header>
+    {% endif %}
 
     <main class="content">
       {% with messages = get_flashed_messages(with_categories=true) %}
@@ -60,9 +62,11 @@
       {% block content %}{% endblock %}
     </main>
 
+    {% if not request.args.get('modal') %}
     <footer class="site-footer">
       <div>Plataforma colaborativa y anónima.</div>
     </footer>
+    {% endif %}
 
     <div id="reportModal" class="modal-overlay" aria-hidden="true">
       <div class="modal">
