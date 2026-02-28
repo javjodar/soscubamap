@@ -7,6 +7,7 @@ from app.models.category import Category
 from app.models.post import Post
 from app.models.user import User
 from app.models.role import Role
+from app.models.site_setting import SiteSetting
 from app.extensions import db
 from . import map_bp
 
@@ -61,6 +62,11 @@ def new_post():
             db.session.flush()
             author_id = anon_user.id
 
+        moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+        moderation_enabled = True
+        if moderation_setting:
+            moderation_enabled = moderation_setting.value == "true"
+
         post = Post(
             title=title,
             description=description,
@@ -71,19 +77,29 @@ def new_post():
             polygon_geojson=polygon_geojson or None,
             author_id=author_id,
         )
+        post.status = "pending" if moderation_enabled else "approved"
         db.session.add(post)
         db.session.commit()
 
-        flash("Reporte enviado a moderacion.", "success")
+        if moderation_enabled:
+            flash("Reporte enviado a moderacion.", "success")
+        else:
+            flash("Reporte publicado.", "success")
         return redirect(url_for("map.dashboard"))
 
     preset_lat = request.args.get("lat", "")
     preset_lng = request.args.get("lng", "")
+    moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+    moderation_enabled = True
+    if moderation_setting:
+        moderation_enabled = moderation_setting.value == "true"
+
     return render_template(
         "map/new_post.html",
         categories=categories,
         preset_lat=preset_lat,
         preset_lng=preset_lng,
+        moderation_enabled=moderation_enabled,
     )
 
 

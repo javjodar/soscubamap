@@ -4,5 +4,34 @@
 <section class="panel">
   <h1>Administracion</h1>
   <p>Gestion de usuarios, roles, categorias y configuracion del mapa.</p>
+
+  <div class="admin-section">
+    <h2>Moderacion</h2>
+    <form method="post" action="{{ url_for('admin.toggle_moderation') }}">
+      <label class="switch">
+        <input type="checkbox" name="moderation_enabled" {% if moderation_enabled %}checked{% endif %} />
+        <span class="slider"></span>
+      </label>
+      <span class="switch-label">
+        {% if moderation_enabled %}
+          Activada (los reportes van a moderacion)
+        {% else %}
+          Desactivada (los reportes se publican directo)
+        {% endif %}
+      </span>
+      <button type="submit" class="btn-primary">Guardar</button>
+    </form>
+  </div>
+
+  <div class="admin-section">
+    <h2>Reportes</h2>
+    <div class="admin-links">
+      <a href="{{ url_for('admin.reports', status='approved') }}">Activos</a>
+      <a href="{{ url_for('admin.reports', status='hidden') }}">Ocultos</a>
+      <a href="{{ url_for('admin.reports', status='pending') }}">Por moderar</a>
+      <a href="{{ url_for('admin.reports', status='deleted') }}">Eliminados</a>
+      <a href="{{ url_for('admin.reports', status='all') }}">Todos</a>
+    </div>
+  </div>
 </section>
 {% endblock %}

@@ -1,0 +1,38 @@
+{% extends "shared/base.html" %}
+{% block title %} | Reportes{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Reportes - {{ status }}</h1>
+
+  <div class="pending-list">
+    {% if posts %}
+      {% for post in posts %}
+        <div class="pending-card">
+          <div>
+            <h3>{{ post.title }}</h3>
+            <div class="muted">{{ post.category.name }}</div>
+            <div class="muted">{{ post.author.anon_code if post.author else 'Anon' }}</div>
+            <p>{{ post.description }}</p>
+            <div class="muted">{{ post.latitude }}, {{ post.longitude }}</div>
+            <div class="muted">{{ post.created_at }}</div>
+          </div>
+          <div class="actions">
+            <form method="post" action="{{ url_for('admin.update_report_status', post_id=post.id, status=status) }}">
+              <select name="status">
+                <option value="approved" {% if post.status == 'approved' %}selected{% endif %}>Activo</option>
+                <option value="hidden" {% if post.status == 'hidden' %}selected{% endif %}>Oculto</option>
+                <option value="pending" {% if post.status == 'pending' %}selected{% endif %}>Pendiente</option>
+                <option value="rejected" {% if post.status == 'rejected' %}selected{% endif %}>Rechazado</option>
+                <option value="deleted" {% if post.status == 'deleted' %}selected{% endif %}>Eliminado</option>
+              </select>
+              <button class="btn-primary" type="submit">Actualizar</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="muted">No hay reportes para este estado.</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

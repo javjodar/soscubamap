@@ -4,6 +4,7 @@ let clickInfo;
 let recentTimer;
 let searchBox;
 let autocomplete;
+let searchMarker;
 
 const CATEGORY_ICONS = {
   "accion-represiva": "fa-hand-fist",
@@ -182,20 +183,12 @@ window.initMap = async function () {
     zoom: 7,
     minZoom: 7,
     mapId: mapEl.dataset.mapId || undefined,
-    mapTypeId: "satellite",
+    mapTypeId: "hybrid",
     tilt: 0,
     heading: 0,
     rotateControl: true,
     gestureHandling: "greedy",
-    styles: [
-      { elementType: "geometry", stylers: [{ color: "#1f1f1f" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#1f1f1f" }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#8b96a3" }] },
-      { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#323232" }] },
-      { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#6ee7b7" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a2a2a" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#0b2430" }] },
-    ],
+    // Styles should be managed via Map ID when present
   });
 
   const searchInput = document.getElementById("mapSearch");
@@ -218,7 +211,16 @@ window.initMap = async function () {
       const place = autocomplete.getPlace();
       if (!place.geometry || !place.geometry.location) return;
       map.panTo(place.geometry.location);
-      map.setZoom(Math.max(map.getZoom(), 12));
+      map.setZoom(Math.max(map.getZoom(), 14));
+
+      if (searchMarker) {
+        searchMarker.setMap(null);
+      }
+      searchMarker = new google.maps.Marker({
+        position: place.geometry.location,
+        map,
+        title: place.name || "Busqueda",
+      });
     });
 
     map.addListener("bounds_changed", () => {

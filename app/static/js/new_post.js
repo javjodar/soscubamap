@@ -16,7 +16,7 @@ window.initDrawMap = function () {
     zoom: hasPreset ? 14 : 7,
     minZoom: 7,
     mapId: mapEl.dataset.mapId || undefined,
-    mapTypeId: "satellite",
+    mapTypeId: "hybrid",
     disableDefaultUI: true,
   });
 

@@ -1,5 +1,6 @@
 {% extends "shared/base.html" %}
 {% block title %} | Nuevo reporte{% endblock %}
+{% block meta_description %}Envía un reporte anonimo sobre acciones represivas, centros penitenciarios o sedes oficiales en Cuba. Tu informacion ayuda a documentar y visibilizar.{% endblock %}
 {% block content %}
 <section class="panel">
   <h1>Nuevo reporte</h1>
@@ -54,7 +55,13 @@
       <input type="text" name="image_url" />
     </label>
     <input type="hidden" name="polygon_geojson" id="polygonGeojson" />
-    <button type="submit" class="btn-primary">Enviar a moderacion</button>
+    <button type="submit" class="btn-primary">
+      {% if moderation_enabled %}
+        Enviar a moderacion
+      {% else %}
+        Publicar reporte
+      {% endif %}
+    </button>
   </form>
 </section>
 

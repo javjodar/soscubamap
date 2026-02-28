@@ -8,6 +8,8 @@ post_status_enum = Enum(
     "pending",
     "approved",
     "rejected",
+    "hidden",
+    "deleted",
     name="post_status",
 )
 
