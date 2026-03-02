@@ -553,7 +553,7 @@ window.initMap = async function () {
   }
 
   const isMobile = window.matchMedia("(max-width: 900px)").matches;
-  const baseZoom = isMobile ? 5.3 : 5.5;
+  const baseZoom = isMobile ? 3 : 3;
 
   map = new google.maps.Map(mapEl, {
     center: { lat: 21.521757, lng: -77.781167 },
