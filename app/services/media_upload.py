@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 import cloudinary
 import cloudinary.uploader
@@ -33,8 +33,9 @@ def _max_count():
 
 
 def validate_files(files) -> Tuple[bool, str]:
+    files = [file for file in (files or []) if file and (file.filename or "").strip()]
     if not files:
-        return False, "No se recibieron imágenes."
+        return True, ""
 
     if len(files) > _max_count():
         return False, f"Máximo {_max_count()} imágenes por envío."
@@ -63,7 +64,9 @@ def validate_files(files) -> Tuple[bool, str]:
 def upload_files(files) -> List[str]:
     _cloudinary_config()
     urls = []
-    for file in files:
+    for file in (files or []):
+        if not file or not (file.filename or "").strip():
+            continue
         filename = secure_filename(file.filename or "imagen")
         result = cloudinary.uploader.upload(
             file,
@@ -78,9 +81,46 @@ def upload_files(files) -> List[str]:
     return urls
 
 
+def get_media_payload(post) -> List[Dict[str, Any]]:
+    items = []
+    for media in (post.media or []):
+        if not media.file_url:
+            continue
+        items.append(
+            {
+                "url": media.file_url,
+                "caption": media.caption or "",
+            }
+        )
+    return items
+
+
 def get_media_urls(post) -> List[str]:
-    return [m.file_url for m in (post.media or []) if m.file_url]
+    return [item["url"] for item in get_media_payload(post) if item.get("url")]
 
 
 def media_json_from_post(post) -> str:
-    return json.dumps(get_media_urls(post))
+    return json.dumps(get_media_payload(post))
+
+
+def parse_media_json(raw: str) -> List[Dict[str, Any]]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw) or []
+    except Exception:
+        return []
+
+    items = []
+    for item in data:
+        if isinstance(item, str):
+            if item:
+                items.append({"url": item, "caption": ""})
+            continue
+        if isinstance(item, dict):
+            url = item.get("url") or item.get("file_url") or ""
+            if not url:
+                continue
+            caption = item.get("caption") or ""
+            items.append({"url": url, "caption": caption})
+    return items

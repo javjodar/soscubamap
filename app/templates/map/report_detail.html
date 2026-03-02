@@ -43,10 +43,15 @@
         {% endif %}
       </div>
       <div class="media-grid" id="mediaGrid">
-        {% if media_urls %}
-          {% for url in media_urls %}
-            <button class="media-thumb" type="button" data-image="{{ url }}">
-              <img src="{{ url }}" alt="Imagen del reporte" />
+        {% if media_items %}
+          {% for item in media_items %}
+            <button
+              class="media-thumb"
+              type="button"
+              data-image="{{ item.url }}"
+              data-caption="{{ item.caption }}"
+            >
+              <img src="{{ item.url }}" alt="Imagen del reporte" />
             </button>
           {% endfor %}
         {% else %}
@@ -67,6 +72,7 @@
             data-allowed-ext="{{ config.IMAGE_ALLOWED_EXTENSIONS }}"
           />
         </label>
+        <div class="image-captions" id="detailImageCaptionList"></div>
         <button type="submit" class="btn-primary">Subir imágenes</button>
         <div class="media-status" id="mediaStatus"></div>
       </form>
@@ -98,6 +104,7 @@
   <div class="image-modal-content">
     <button class="image-modal-close" type="button" data-close-image>&times;</button>
     <img id="imageModalImg" src="" alt="Imagen ampliada" />
+    <div class="image-modal-caption" id="imageModalCaption"></div>
   </div>
 </div>
 

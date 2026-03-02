@@ -7,6 +7,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function unescapeHtml(value) {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = value || "";
+  return textarea.value;
+}
+
 async function verifyPost(postId) {
   const res = await fetch(`/api/posts/${postId}/verify`, { method: "POST" });
   return await res.json();
@@ -129,15 +135,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const mediaInput = document.getElementById("mediaInput");
   const mediaStatus = document.getElementById("mediaStatus");
   const mediaGrid = document.getElementById("mediaGrid");
+  const captionList = document.getElementById("detailImageCaptionList");
   const modal = document.getElementById("imageModal");
   const modalImg = document.getElementById("imageModalImg");
+  const modalCaption = document.getElementById("imageModalCaption");
 
   const bindThumbnails = () => {
     document.querySelectorAll(".media-thumb").forEach((btn) => {
       btn.addEventListener("click", () => {
         const src = btn.getAttribute("data-image");
+        const caption = unescapeHtml(btn.getAttribute("data-caption") || "");
         if (!src || !modal || !modalImg) return;
         modalImg.src = src;
+        if (modalCaption) {
+          modalCaption.textContent = caption;
+        }
         modal.setAttribute("aria-hidden", "false");
         modal.classList.add("open");
       });
@@ -149,11 +161,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     modal.setAttribute("aria-hidden", "true");
     modal.classList.remove("open");
     modalImg.src = "";
+    if (modalCaption) modalCaption.textContent = "";
   };
 
   document.querySelectorAll("[data-close-image]").forEach((btn) => {
     btn.addEventListener("click", closeModal);
   });
+
+  const renderCaptions = () => {
+    if (!captionList || !mediaInput) return;
+    if (!mediaInput.files || mediaInput.files.length === 0) {
+      captionList.innerHTML = "";
+      return;
+    }
+    captionList.innerHTML = Array.from(mediaInput.files)
+      .map(
+        (file, idx) => `
+          <label class="image-caption">
+            Descripción corta (imagen ${idx + 1})
+            <input type="text" name="image_captions[]" maxlength="255" placeholder="${file.name}" />
+          </label>
+        `
+      )
+      .join("");
+  };
+
+  if (mediaInput) {
+    mediaInput.addEventListener("change", renderCaptions);
+  }
 
   if (mediaForm && mediaInput) {
     mediaForm.addEventListener("submit", async (e) => {
@@ -192,6 +227,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const formData = new FormData();
       Array.from(files).forEach((file) => formData.append("images", file));
+      if (captionList) {
+        captionList.querySelectorAll('input[name="image_captions[]"]').forEach((input) => {
+          formData.append("image_captions[]", input.value || "");
+        });
+      }
 
       if (mediaStatus) mediaStatus.textContent = "Subiendo imágenes...";
       const res = await fetch(`/api/posts/${postId}/media`, {
@@ -212,18 +252,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (Array.isArray(data.media) && mediaGrid) {
         mediaGrid.innerHTML = data.media
-          .map(
-            (url) => `
-              <button class="media-thumb" type="button" data-image="${url}">
+          .map((item) => {
+            if (typeof item === "string") {
+              return `
+                <button class="media-thumb" type="button" data-image="${item}" data-caption="">
+                  <img src="${item}" alt="Imagen del reporte" />
+                </button>
+              `;
+            }
+            const url = item?.url || "";
+            const caption = item?.caption || "";
+            return `
+              <button class="media-thumb" type="button" data-image="${url}" data-caption="${escapeHtml(caption)}">
                 <img src="${url}" alt="Imagen del reporte" />
               </button>
-            `
-          )
+            `;
+          })
           .join("");
         bindThumbnails();
       }
 
       mediaInput.value = "";
+      renderCaptions();
       setTimeout(() => {
         if (mediaStatus) mediaStatus.textContent = "";
       }, 2000);

@@ -14,7 +14,13 @@ from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.media import Media
 from app.services.geo_lookup import lookup_location, list_provinces, list_municipalities, municipalities_map
-from app.services.media_upload import media_json_from_post, get_media_urls, validate_files, upload_files
+from app.services.media_upload import (
+    media_json_from_post,
+    get_media_payload,
+    parse_media_json,
+    validate_files,
+    upload_files,
+)
 from app.extensions import db
 from . import map_bp
 
@@ -53,6 +59,18 @@ def _resolve_geo_location(lat, lng, province, municipality):
     return province, municipality
 
 
+def _clean_captions(raw, count):
+    captions = []
+    for idx in range(count):
+        value = ""
+        if raw and idx < len(raw):
+            value = (raw[idx] or "").strip()
+        if value:
+            value = value[:255]
+        captions.append(value)
+    return captions
+
+
 @map_bp.route("/")
 def dashboard():
     categories = Category.query.order_by(Category.id.asc()).all()
@@ -82,7 +100,12 @@ def new_post():
         province = request.form.get("province", "").strip()
         municipality = request.form.get("municipality", "").strip()
         polygon_geojson = request.form.get("polygon_geojson", "").strip()
-        images = request.files.getlist("images")
+        images = [
+            file
+            for file in request.files.getlist("images")
+            if file and (file.filename or "").strip()
+        ]
+        image_captions = request.form.getlist("image_captions[]")
         links = request.form.getlist("links[]")
         links = [link.strip() for link in links if link.strip()]
 
@@ -146,8 +169,10 @@ def new_post():
 
         if images:
             media_urls = upload_files(images)
-            for url in media_urls:
-                db.session.add(Media(post_id=post.id, file_url=url))
+            captions = _clean_captions(image_captions, len(media_urls))
+            for idx, url in enumerate(media_urls):
+                caption = captions[idx] if idx < len(captions) else ""
+                db.session.add(Media(post_id=post.id, file_url=url, caption=caption or None))
             db.session.commit()
 
         payload = {
@@ -252,6 +277,12 @@ def edit_report_public(post_id):
         province = request.form.get("province", "").strip()
         municipality = request.form.get("municipality", "").strip()
         polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        images = [
+            file
+            for file in request.files.getlist("images")
+            if file and (file.filename or "").strip()
+        ]
+        image_captions = request.form.getlist("image_captions[]")
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
 
@@ -261,6 +292,11 @@ def edit_report_public(post_id):
         if not edit_reason:
             flash("El motivo de edición es obligatorio.", "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
+        if images:
+            ok, error = validate_files(images)
+            if not ok:
+                flash(error, "error")
+                return redirect(url_for("map.edit_report_public", post_id=post.id))
 
         try:
             lat = Decimal(latitude)
@@ -281,8 +317,23 @@ def edit_report_public(post_id):
 
         editor = _get_or_create_anon_editor()
         editor_label = f"Anon-{editor.anon_code}" if editor and editor.anon_code else "Anon"
+        media_urls = []
+        media_items = []
+        if images:
+            media_urls = upload_files(images)
+            if not media_urls:
+                flash("No se pudo subir la imagen.", "error")
+                return redirect(url_for("map.edit_report_public", post_id=post.id))
+            captions = _clean_captions(image_captions, len(media_urls))
+            media_items = [
+                {"url": url, "caption": (captions[idx] if idx < len(captions) else "")}
+                for idx, url in enumerate(media_urls)
+            ]
 
         if moderation_enabled:
+            combined_media = None
+            if media_items:
+                combined_media = get_media_payload(post) + media_items
             edit_req = PostEditRequest(
                 post_id=post.id,
                 editor_id=editor.id if editor else None,
@@ -298,6 +349,7 @@ def edit_report_public(post_id):
                 category_id=int(category_id),
                 polygon_geojson=polygon_geojson or None,
                 links_json=json.dumps(links_list) if links_list else None,
+                media_json=json.dumps(combined_media) if combined_media is not None else None,
             )
             db.session.add(edit_req)
             db.session.commit()
@@ -337,6 +389,15 @@ def edit_report_public(post_id):
         post.municipality = municipality or None
         post.polygon_geojson = polygon_geojson or None
         post.links_json = json.dumps(links_list) if links_list else None
+        if media_items:
+            for item in media_items:
+                db.session.add(
+                    Media(
+                        post_id=post.id,
+                        file_url=item.get("url"),
+                        caption=(item.get("caption") or None),
+                    )
+                )
         db.session.commit()
 
         payload = {"status": "approved"}
@@ -345,11 +406,18 @@ def edit_report_public(post_id):
         flash("Edición aplicada.", "success")
         return redirect(url_for("map.dashboard"))
 
+    moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+    moderation_enabled = True
+    if moderation_setting:
+        moderation_enabled = moderation_setting.value == "true"
+
     return render_template(
         "map/edit_report.html",
         post=post,
         categories=categories,
         links=links,
+        media_items=get_media_payload(post),
+        moderation_enabled=moderation_enabled,
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
     )
@@ -383,7 +451,7 @@ def report_detail(post_id):
         post=post,
         links=links,
         anon_label=anon_label,
-        media_urls=get_media_urls(post),
+        media_items=get_media_payload(post),
         moderation_enabled=moderation_enabled,
     )
 
@@ -412,10 +480,7 @@ def post_history(post_id):
         else:
             rev_links[rev.id] = []
         if rev.media_json:
-            try:
-                rev_media[rev.id] = json.loads(rev.media_json)
-            except Exception:
-                rev_media[rev.id] = []
+            rev_media[rev.id] = parse_media_json(rev.media_json)
         else:
             rev_media[rev.id] = []
 
@@ -426,7 +491,7 @@ def post_history(post_id):
         links=links,
         rev_links=rev_links,
         latest_reason=latest_reason,
-        media_urls=get_media_urls(post),
+        media_items=get_media_payload(post),
         rev_media=rev_media,
     )
 

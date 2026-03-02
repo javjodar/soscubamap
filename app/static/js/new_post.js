@@ -232,6 +232,7 @@ function setupProvinceMunicipality() {
 function setupImageValidation() {
   const input = document.querySelector('input[name="images"]');
   const status = document.getElementById("imageStatus");
+  const captionsList = document.getElementById("imageCaptionList");
   if (!input) return;
 
   const maxFiles = parseInt(input.dataset.maxFiles || "3", 10);
@@ -248,11 +249,30 @@ function setupImageValidation() {
     status.textContent = message;
   };
 
+  const renderCaptions = () => {
+    if (!captionsList) return;
+    if (!input.files || input.files.length === 0) {
+      captionsList.innerHTML = "";
+      return;
+    }
+    captionsList.innerHTML = Array.from(input.files)
+      .map(
+        (file, idx) => `
+          <label class="image-caption">
+            Descripción corta (imagen ${idx + 1})
+            <input type="text" name="image_captions[]" maxlength="255" placeholder="${file.name}" />
+          </label>
+        `
+      )
+      .join("");
+  };
+
   input.addEventListener("change", () => {
     if (!input.files) return;
     if (input.files.length > maxFiles) {
       showError(`Máximo ${maxFiles} imágenes por envío.`);
       input.value = "";
+      renderCaptions();
       return;
     }
 
@@ -262,16 +282,19 @@ function setupImageValidation() {
       if (!allowedExt.includes(ext)) {
         showError(`Formato no permitido: ${ext || "desconocido"}.`);
         input.value = "";
+        renderCaptions();
         return;
       }
       if (file.size > maxBytes) {
         showError(`Cada imagen debe ser <= ${maxMb}MB.`);
         input.value = "";
+        renderCaptions();
         return;
       }
     }
 
     if (status) status.textContent = "";
+    renderCaptions();
   });
 }
 

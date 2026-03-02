@@ -651,6 +651,18 @@ body {
   color: var(--accent);
 }
 
+.image-captions {
+  display: grid;
+  gap: 8px;
+}
+
+.image-caption {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .verify-count {
   font-weight: 700;
   color: var(--accent);
@@ -1092,6 +1104,12 @@ textarea {
   max-width: 90vw;
   max-height: 80vh;
   display: block;
+}
+
+.image-modal-caption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .image-modal-close {

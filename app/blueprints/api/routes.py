@@ -12,7 +12,12 @@ from app.models.media import Media
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.site_setting import SiteSetting
-from app.services.media_upload import validate_files, upload_files, media_json_from_post, get_media_urls
+from app.services.media_upload import (
+    validate_files,
+    upload_files,
+    media_json_from_post,
+    get_media_payload,
+)
 from app.models.chat_message import ChatMessage
 from app.models.chat_presence import ChatPresence
 
@@ -187,7 +192,12 @@ def vote_comment(comment_id):
 @api_bp.route("/posts/<int:post_id>/media", methods=["POST"])
 def upload_post_media(post_id):
     post = Post.query.get_or_404(post_id)
-    files = request.files.getlist("images")
+    files = [
+        file
+        for file in request.files.getlist("images")
+        if file and (file.filename or "").strip()
+    ]
+    captions_raw = request.form.getlist("image_captions[]")
     ok, error = validate_files(files)
     if not ok:
         return jsonify({"ok": False, "error": error}), 400
@@ -202,7 +212,17 @@ def upload_post_media(post_id):
         return jsonify({"ok": False, "error": "No se pudo subir la imagen."}), 400
 
     if moderation_enabled:
-        combined = get_media_urls(post) + urls
+        captions = []
+        for idx in range(len(urls)):
+            value = ""
+            if idx < len(captions_raw):
+                value = (captions_raw[idx] or "").strip()
+            captions.append(value[:255] if value else "")
+        new_items = [
+            {"url": url, "caption": (captions[idx] if idx < len(captions) else "")}
+            for idx, url in enumerate(urls)
+        ]
+        combined = get_media_payload(post) + new_items
         edit = PostEditRequest(
             post_id=post.id,
             editor_id=current_user.id if current_user.is_authenticated else None,
@@ -243,11 +263,19 @@ def upload_post_media(post_id):
     )
     db.session.add(revision)
 
-    for url in urls:
-        db.session.add(Media(post_id=post.id, file_url=url))
+    captions = []
+    for idx in range(len(urls)):
+        value = ""
+        if idx < len(captions_raw):
+            value = (captions_raw[idx] or "").strip()
+        captions.append(value[:255] if value else "")
+
+    for idx, url in enumerate(urls):
+        caption = captions[idx] if idx < len(captions) else ""
+        db.session.add(Media(post_id=post.id, file_url=url, caption=caption or None))
     db.session.commit()
 
-    return jsonify({"ok": True, "status": "approved", "media": get_media_urls(post)})
+    return jsonify({"ok": True, "status": "approved", "media": get_media_payload(post)})
 
 
 @api_bp.route("/chat", methods=["GET", "POST"])

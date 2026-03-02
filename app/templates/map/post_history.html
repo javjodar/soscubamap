@@ -25,11 +25,11 @@
           </ul>
         </div>
       {% endif %}
-      {% if media_urls %}
+      {% if media_items %}
         <div><strong>Imágenes:</strong>
           <div class="history-media">
-            {% for url in media_urls %}
-              <img src="{{ url }}" alt="Imagen del reporte" />
+            {% for item in media_items %}
+              <img src="{{ item.url }}" alt="Imagen del reporte" />
             {% endfor %}
           </div>
         </div>
@@ -62,8 +62,8 @@
             {% if rev_media[rev.id] %}
               <div><strong>Imágenes:</strong>
                 <div class="history-media">
-                  {% for url in rev_media[rev.id] %}
-                    <img src="{{ url }}" alt="Imagen del reporte" />
+                  {% for item in rev_media[rev.id] %}
+                    <img src="{{ item.url }}" alt="Imagen del reporte" />
                   {% endfor %}
                 </div>
               </div>

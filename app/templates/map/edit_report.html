@@ -21,7 +21,7 @@
     <div class="draw-help">Usa polígono, rectángulo o círculo. Puedes editar el área antes de guardar.</div>
   </div>
 
-  <form class="form-grid" method="post">
+  <form class="form-grid" method="post" enctype="multipart/form-data">
     <label>
       Título
       <input type="text" name="title" value="{{ post.title }}" required />
@@ -86,6 +86,39 @@
           <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
         {% endif %}
       </div>
+    </div>
+    <div class="media-section">
+      <div class="media-header">
+        <div class="media-title">Imágenes</div>
+        {% if moderation_enabled %}
+          <div class="media-note">Las imágenes nuevas pueden requerir moderación.</div>
+        {% endif %}
+      </div>
+      <div class="media-grid">
+        {% if media_items %}
+          {% for item in media_items %}
+            <div class="media-thumb">
+              <img src="{{ item.url }}" alt="Imagen del reporte" />
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="muted">Aún no hay imágenes para este reporte.</div>
+        {% endif %}
+      </div>
+      <label>
+        Subir imágenes (máx {{ config.IMAGE_MAX_PER_SUBMIT }}, {{ config.IMAGE_MAX_MB }}MB c/u)
+        <input
+          type="file"
+          name="images"
+          multiple
+          accept=".jpg,.jpeg,.png,.webp,.heic,image/heic,image/heif"
+          data-max-files="{{ config.IMAGE_MAX_PER_SUBMIT }}"
+          data-max-mb="{{ config.IMAGE_MAX_MB }}"
+          data-allowed-ext="{{ config.IMAGE_ALLOWED_EXTENSIONS }}"
+        />
+        <div class="media-status" id="editImageStatus"></div>
+      </label>
+      <div class="image-captions" id="editImageCaptionList"></div>
     </div>
     <input type="hidden" name="polygon_geojson" id="polygonGeojson" value="{{ post.polygon_geojson or '' }}" />
     <button type="submit" class="btn-primary">Enviar edición</button>
