@@ -44,19 +44,41 @@
     </div>
   </div>
 
+  {% macro render_comment(comment, depth=0) %}
+    <div class="discussion-comment" data-comment-id="{{ comment.id }}" style="margin-left: {{ depth * 18 }}px;">
+      <div class="discussion-meta">{{ comment.author_label }} · {{ comment.created_at }}</div>
+      <div class="discussion-body">{{ comment.body_html|safe }}</div>
+      <div class="discussion-actions">
+        <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="1">▲</button>
+        <span class="vote-score" id="comment-score-{{ comment.id }}">{{ comment.score }}</span>
+        <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="-1">▼</button>
+        <button class="btn-secondary reply-toggle" type="button" data-reply-toggle="{{ comment.id }}">Responder</button>
+      </div>
+      <form id="reply-form-{{ comment.id }}" class="comment-form reply-form is-hidden" method="post">
+        <input type="hidden" name="parent_id" value="{{ comment.id }}" />
+        <label>
+          Nick
+          <input type="text" name="comment_nickname" value="{{ nick }}" maxlength="80" />
+        </label>
+        <label>
+          Comentario
+          <textarea name="comment_body" rows="4" required placeholder="Responde con contexto y fuentes"></textarea>
+        </label>
+        <button type="submit" class="btn-primary">Publicar comentario</button>
+      </form>
+    </div>
+    {% if comment.thread_children %}
+      {% for child in comment.thread_children %}
+        {{ render_comment(child, depth + 1) }}
+      {% endfor %}
+    {% endif %}
+  {% endmacro %}
+
   <div class="discussion-comments">
     <h2>Comentarios</h2>
     {% if comments %}
       {% for comment in comments %}
-        <div class="discussion-comment" data-comment-id="{{ comment.id }}">
-          <div class="discussion-meta">{{ comment.author_label }} · {{ comment.created_at }}</div>
-          <div class="discussion-body">{{ comment.body_html|safe }}</div>
-          <div class="discussion-actions">
-            <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="1">▲</button>
-            <span class="vote-score" id="comment-score-{{ comment.id }}">{{ comment.score }}</span>
-            <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="-1">▼</button>
-          </div>
-        </div>
+        {{ render_comment(comment, 0) }}
       {% endfor %}
     {% else %}
       <div class="muted">No hay comentarios aún.</div>

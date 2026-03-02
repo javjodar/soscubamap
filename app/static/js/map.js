@@ -11,6 +11,7 @@ let allPosts = [];
 let mapImageModal;
 let mapImageModalImg;
 let mapImageModalCaption;
+let pendingMarkers = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   const filters = document.querySelector(".filters");
@@ -88,6 +89,8 @@ function syncLegend() {
 function clearMarkers() {
   markers.forEach((marker) => marker.setMap(null));
   markers = [];
+  pendingMarkers.forEach((marker) => marker.setMap(null));
+  pendingMarkers = [];
 }
 
 function getSelectedCategoryIds() {
@@ -341,10 +344,47 @@ function updateLegendCounts(posts) {
 
 window.handleNewReport = function (payload) {
   if (!payload || !map) return;
+  const position = { lat: payload.latitude, lng: payload.longitude };
+  const iconClass = CATEGORY_ICONS[payload.category?.slug] || "fa-location-dot";
+  const imageUrl = CATEGORY_IMAGES[payload.category?.slug];
+
   if (payload.status !== "approved") {
+    let marker;
+    if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+      marker = new google.maps.marker.AdvancedMarkerElement({
+        position,
+        map,
+        title: payload.title || "Reporte pendiente",
+        content: buildMarkerContent("fa-hourglass-half", imageUrl),
+      });
+    } else {
+      marker = new google.maps.Marker({
+        position,
+        map,
+        title: payload.title || "Reporte pendiente",
+        icon: imageUrl
+          ? {
+              url: imageUrl,
+              scaledSize: new google.maps.Size(28, 28),
+            }
+          : undefined,
+      });
+    }
+    pendingMarkers.push(marker);
+    map.panTo(position);
+    const info = new google.maps.InfoWindow({
+      content: `
+        <div style="color:#111;max-width:240px;">
+          <strong>Reporte enviado a moderación.</strong>
+          <div style="font-size:12px;margin-top:6px;">Se mostrará cuando sea aprobado.</div>
+        </div>
+      `,
+    });
+    info.open({ anchor: marker, map });
     refreshRecent();
     return;
   }
+
   if (Array.isArray(allPosts)) {
     allPosts.unshift(payload);
   }
@@ -352,27 +392,31 @@ window.handleNewReport = function (payload) {
   const selected = getSelectedCategoryIds();
   if (selected.size && payload.category?.id && !selected.has(payload.category.id)) {
     refreshRecent();
+    map.panTo(position);
     return;
   }
-  const position = { lat: payload.latitude, lng: payload.longitude };
-  const iconClass = CATEGORY_ICONS[payload.category?.slug] || "fa-location-dot";
   let marker;
   if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
     marker = new google.maps.marker.AdvancedMarkerElement({
       position,
       map,
       title: payload.title,
-      content: buildMarkerContent(iconClass),
+      content: buildMarkerContent(iconClass, imageUrl),
     });
   } else {
     marker = new google.maps.Marker({
       position,
       map,
       title: payload.title,
+      icon: imageUrl
+        ? {
+            url: imageUrl,
+            scaledSize: new google.maps.Size(28, 28),
+          }
+        : undefined,
     });
   }
   map.panTo(position);
-  map.setZoom(Math.max(map.getZoom(), 14));
   markers.push(marker);
   refreshRecent();
 };

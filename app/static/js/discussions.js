@@ -184,10 +184,27 @@ function setupLoadingButtons() {
   }
 }
 
+function setupReplyToggles() {
+  document.querySelectorAll("[data-reply-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-reply-toggle");
+      if (!id) return;
+      const form = document.getElementById(`reply-form-${id}`);
+      if (!form) return;
+      form.classList.toggle("is-hidden");
+      if (!form.classList.contains("is-hidden")) {
+        const textarea = form.querySelector("textarea");
+        if (textarea) textarea.focus();
+      }
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   setupMarkdownEditor();
   setupLinks();
   setupImageUploads();
   setupVotes();
   setupLoadingButtons();
+  setupReplyToggles();
 });

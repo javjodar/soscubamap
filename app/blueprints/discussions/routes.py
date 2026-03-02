@@ -114,6 +114,7 @@ def detail(post_id):
     if request.method == "POST":
         body = request.form.get("comment_body", "").strip()
         nickname = request.form.get("comment_nickname", "").strip()
+        parent_id = request.form.get("parent_id", "").strip()
         if not body:
             flash("El comentario no puede estar vacío.", "error")
             return redirect(url_for("discussions.detail", post_id=post.id))
@@ -123,11 +124,20 @@ def detail(post_id):
         nickname = nickname[:80]
         session["discussion_nick"] = nickname
 
+        parent = None
+        if parent_id:
+            try:
+                parent_id_int = int(parent_id)
+                parent = DiscussionComment.query.filter_by(id=parent_id_int, post_id=post.id).first()
+            except Exception:
+                parent = None
+
         comment = DiscussionComment(
             post_id=post.id,
             body=body,
             body_html=render_markdown(body),
             author_label=nickname,
+            parent_id=parent.id if parent else None,
         )
         db.session.add(comment)
         db.session.commit()
@@ -143,11 +153,20 @@ def detail(post_id):
 
     images = parse_media_json(post.images_json)
     comments = DiscussionComment.query.filter_by(post_id=post.id).order_by(DiscussionComment.created_at.asc()).all()
+    comment_map = {c.id: c for c in comments}
+    roots = []
+    for comment in comments:
+        comment.thread_children = []
+    for comment in comments:
+        if comment.parent_id and comment.parent_id in comment_map:
+            comment_map[comment.parent_id].thread_children.append(comment)
+        else:
+            roots.append(comment)
     return render_template(
         "discussions/detail.html",
         post=post,
         links=links,
         images=images,
-        comments=comments,
+        comments=roots,
         nick=_get_discussion_nick(),
     )

@@ -918,6 +918,35 @@ button[data-loading="true"]::after {
   margin-bottom: 20px;
 }
 
+.discussion-page .comment-form {
+  display: grid;
+  gap: 14px;
+}
+
+.discussion-page .comment-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.discussion-page .comment-form button {
+  justify-self: start;
+}
+
+.reply-form {
+  margin-top: 10px;
+}
+
+.reply-toggle {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.is-hidden {
+  display: none;
+}
+
 .discussion-comment {
   border: 1px solid var(--border);
   border-radius: 10px;
