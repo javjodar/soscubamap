@@ -3,6 +3,7 @@ import secrets
 import re
 from flask import render_template, request, redirect, url_for, flash, session
 from sqlalchemy import func
+from flask_login import current_user
 
 from app.extensions import db
 from app.models.discussion_post import DiscussionPost
@@ -14,14 +15,27 @@ from . import discussions_bp
 
 
 def _get_discussion_nick():
+    allow_admin = current_user.is_authenticated and current_user.has_role("administrador")
     nick = session.get("discussion_nick")
-    if nick:
+    if nick and (nick.lower() != "admin" or allow_admin):
         return nick
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     code = "".join(secrets.choice(alphabet) for _ in range(4))
     nick = f"Anon-{code}"
     session["discussion_nick"] = nick
     return nick
+
+
+def _resolve_discussion_nick(nickname: str) -> str:
+    allow_admin = current_user.is_authenticated and current_user.has_role("administrador")
+    value = (nickname or "").strip()
+    if not value:
+        value = _get_discussion_nick()
+    if value.lower() == "admin" and not allow_admin:
+        value = _get_discussion_nick()
+    value = value[:80]
+    session["discussion_nick"] = value
+    return value
 
 
 def _clean_captions(raw, count):
@@ -116,10 +130,7 @@ def new_discussion():
             flash("Título y contenido son obligatorios.", "error")
             return redirect(url_for("discussions.new_discussion"))
 
-        if not nickname:
-            nickname = _get_discussion_nick()
-        nickname = nickname[:80]
-        session["discussion_nick"] = nickname
+        nickname = _resolve_discussion_nick(nickname)
 
         if images:
             ok, error = validate_files(images)
@@ -170,10 +181,7 @@ def detail(post_id):
             flash("El comentario no puede estar vacío.", "error")
             return redirect(url_for("discussions.detail", post_id=post.id))
 
-        if not nickname:
-            nickname = _get_discussion_nick()
-        nickname = nickname[:80]
-        session["discussion_nick"] = nickname
+        nickname = _resolve_discussion_nick(nickname)
 
         parent = None
         if parent_id:

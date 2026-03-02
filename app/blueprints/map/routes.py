@@ -26,10 +26,11 @@ from . import map_bp
 
 
 def _get_chat_nick():
+    allow_admin = current_user.is_authenticated and current_user.has_role("administrador")
     if current_user.is_authenticated and current_user.anon_code:
         return f"Anon-{current_user.anon_code}"
     nick = session.get("chat_nick")
-    if nick:
+    if nick and (nick.lower() != "admin" or allow_admin):
         return nick
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     code = "".join(secrets.choice(alphabet) for _ in range(6))

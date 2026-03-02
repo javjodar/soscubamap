@@ -29,6 +29,30 @@ from app.models.category import Category
 from . import api_bp
 
 
+def _is_admin_user():
+    return current_user.is_authenticated and current_user.has_role("administrador")
+
+
+def _get_chat_nick():
+    nick = session.get("chat_nick")
+    if nick and (nick.lower() != "admin" or _is_admin_user()):
+        return nick
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    code = "".join(secrets.choice(alphabet) for _ in range(6))
+    nick = f"Anon-{code}"
+    session["chat_nick"] = nick
+    return nick
+
+
+def _sanitize_nick(nickname: str, fallback: str) -> str:
+    value = (nickname or "").strip()
+    if not value:
+        return fallback
+    if value.lower() == "admin" and not _is_admin_user():
+        return fallback
+    return value[:80]
+
+
 @api_bp.route("/health")
 def health():
     return jsonify({"status": "ok"})
@@ -450,10 +474,7 @@ def chat_messages():
         if not body:
             return jsonify({"ok": False, "error": "Mensaje vacío."}), 400
 
-        if not nickname:
-            nickname = session.get("chat_nick") or "Anon"
-
-        nickname = nickname[:80]
+        nickname = _sanitize_nick(nickname, _get_chat_nick())
         session["chat_nick"] = nickname
 
         presence = ChatPresence.query.filter_by(session_id=session_id).first()
@@ -469,7 +490,7 @@ def chat_messages():
         db.session.add(msg)
         db.session.commit()
     else:
-        nickname = session.get("chat_nick") or "Anon"
+        nickname = _get_chat_nick()
         presence = ChatPresence.query.filter_by(session_id=session_id).first()
         if not presence:
             presence = ChatPresence(session_id=session_id, nickname=nickname, last_seen=now)
