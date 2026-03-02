@@ -132,6 +132,12 @@
 
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script>
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    viewport.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes");
+  }
+</script>
 {% if google_maps_api_key %}
 <script async
   src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker,places&v=beta">
