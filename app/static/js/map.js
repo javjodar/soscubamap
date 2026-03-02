@@ -558,7 +558,7 @@ window.initMap = async function () {
   map = new google.maps.Map(mapEl, {
     center: { lat: 21.521757, lng: -77.781167 },
     zoom: baseZoom,
-    minZoom: baseZoom,
+    minZoom: 0,
     maxZoom: undefined,
     restriction: { latLngBounds: CUBA_BOUNDS, strictBounds: true },
     mapId: mapEl.dataset.mapId || undefined,
