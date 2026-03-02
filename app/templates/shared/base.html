@@ -7,6 +7,7 @@
     <meta name="description" content="{% block meta_description %}Mapa colaborativo para documentar acciones represivas y lugares clave en Cuba. Reportes anónimos, verificación comunitaria y visualización en tiempo real.{% endblock %}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favico.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+    {% block head_extra %}{% endblock %}
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -25,6 +26,7 @@
       <nav class="nav-links">
         <a href="{{ url_for('map.dashboard') }}">Mapa</a>
         <a href="{{ url_for('map.dashboard') }}#chatbox">Chat</a>
+        <a href="{{ url_for('discussions.index') }}">Discusiones</a>
         {% if current_user.is_authenticated %}
           <button class="btn-secondary" type="button" data-open-report data-url="{{ url_for('map.new_post') }}">Nuevo reporte</button>
           <a href="{{ url_for('map.reports') }}">Reportes</a>

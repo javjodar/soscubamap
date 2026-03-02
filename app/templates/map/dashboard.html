@@ -146,6 +146,14 @@
   </div>
 </section>
 
+<div id="mapImageModal" class="image-modal" aria-hidden="true" data-allow-zoom="1">
+  <div class="image-modal-backdrop" data-close-map-image></div>
+  <div class="image-modal-content">
+    <button class="image-modal-close" type="button" data-close-map-image>&times;</button>
+    <img id="mapImageModalImg" src="" alt="Imagen ampliada" />
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>

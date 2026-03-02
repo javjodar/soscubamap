@@ -1,0 +1,80 @@
+{% extends "shared/base.html" %}
+{% block title %} | Discusión{% endblock %}
+{% block meta_description %}Detalle de discusión en #SOSCuba Map. Vota, comenta y aporta fuentes verificables.{% endblock %}
+{% block head_extra %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+{% endblock %}
+{% block content %}
+<section class="panel discussion-page">
+  <div class="discussion-detail">
+    <h1>{{ post.title }}</h1>
+    <div class="discussion-meta">{{ post.author_label }} · {{ post.created_at }}</div>
+    <div class="discussion-body">{{ post.body_html|safe }}</div>
+
+    {% if links and links|length %}
+      <div class="muted">Fuentes</div>
+      <ul class="history-links">
+        {% for link in links %}
+          <li><a href="{{ link }}" target="_blank" rel="noopener">{{ link }}</a></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if images and images|length %}
+      <div class="media-grid">
+        {% for item in images %}
+          <div class="discussion-media-item">
+            <div class="media-thumb">
+              <img src="{{ item.url }}" alt="Imagen de discusión" />
+            </div>
+            {% if item.caption %}
+              <div class="muted">{{ item.caption }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="discussion-actions">
+      <button class="vote-btn" data-type="post" data-id="{{ post.id }}" data-value="1">▲</button>
+      <span class="vote-score" id="post-score-{{ post.id }}">{{ post.score }}</span>
+      <button class="vote-btn" data-type="post" data-id="{{ post.id }}" data-value="-1">▼</button>
+    </div>
+  </div>
+
+  <div class="discussion-comments">
+    <h2>Comentarios</h2>
+    {% if comments %}
+      {% for comment in comments %}
+        <div class="discussion-comment" data-comment-id="{{ comment.id }}">
+          <div class="discussion-meta">{{ comment.author_label }} · {{ comment.created_at }}</div>
+          <div class="discussion-body">{{ comment.body_html|safe }}</div>
+          <div class="discussion-actions">
+            <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="1">▲</button>
+            <span class="vote-score" id="comment-score-{{ comment.id }}">{{ comment.score }}</span>
+            <button class="vote-btn" data-type="comment" data-id="{{ comment.id }}" data-value="-1">▼</button>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="muted">No hay comentarios aún.</div>
+    {% endif %}
+  </div>
+
+  <form class="comment-form" method="post">
+    <label>
+      Nick
+      <input type="text" name="comment_nickname" value="{{ nick }}" maxlength="80" />
+    </label>
+    <label>
+      Comentario
+      <textarea name="comment_body" rows="5" required placeholder="Responde con contexto y fuentes"></textarea>
+    </label>
+    <button type="submit" class="btn-primary">Publicar comentario</button>
+  </form>
+</section>
+
+<script src="{{ url_for('static', filename='js/discussions.js') }}"></script>
+{% endblock %}

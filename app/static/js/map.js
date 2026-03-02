@@ -8,6 +8,8 @@ let searchMarker;
 let geocoder;
 let isAdmin = false;
 let allPosts = [];
+let mapImageModal;
+let mapImageModalImg;
 
 document.addEventListener("DOMContentLoaded", () => {
   const filters = document.querySelector(".filters");
@@ -20,6 +22,22 @@ document.addEventListener("DOMContentLoaded", () => {
     toggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
   });
 });
+
+function setupMapImageModal() {
+  mapImageModal = document.getElementById("mapImageModal");
+  mapImageModalImg = document.getElementById("mapImageModalImg");
+  if (!mapImageModal || !mapImageModalImg) return;
+
+  const close = () => {
+    mapImageModal.setAttribute("aria-hidden", "true");
+    mapImageModal.classList.remove("open");
+    mapImageModalImg.src = "";
+  };
+
+  document.querySelectorAll("[data-close-map-image]").forEach((btn) => {
+    btn.addEventListener("click", close);
+  });
+}
 
 const CATEGORY_ICONS = {
   "accion-represiva": "fa-hand-fist",
@@ -131,7 +149,11 @@ function renderMarkers(posts) {
             .map((item) => {
               const url = typeof item === "string" ? item : item?.url;
               if (!url) return "";
-              return `<img src="${url}" alt="Imagen del reporte" />`;
+              return `
+                <button class="info-media-thumb" type="button" data-image="${url}">
+                  <img src="${url}" alt="Imagen del reporte" />
+                </button>
+              `;
             })
             .join("")}
         </div>`
@@ -172,6 +194,16 @@ function renderMarkers(posts) {
     });
 
     google.maps.event.addListener(info, "domready", () => {
+      const thumbs = document.querySelectorAll(".info-media-thumb");
+      thumbs.forEach((thumb) => {
+        thumb.addEventListener("click", () => {
+          const url = thumb.getAttribute("data-image");
+          if (!url || !mapImageModal || !mapImageModalImg) return;
+          mapImageModalImg.src = url;
+          mapImageModal.setAttribute("aria-hidden", "false");
+          mapImageModal.classList.add("open");
+        });
+      });
       const detailBtn = document.getElementById(`detailBtn-${post.id}`);
       if (detailBtn) {
         detailBtn.addEventListener("click", () => {
@@ -404,6 +436,7 @@ async function refreshRecent() {
 }
 
 window.initMap = async function () {
+  setupMapImageModal();
   syncLegend();
   const mapEl = document.getElementById("map");
   const apiKey = mapEl.dataset.apiKey;
@@ -540,7 +573,9 @@ window.initMap = async function () {
       const btn = document.getElementById("createReportBtn");
       if (btn) {
         btn.addEventListener("click", () => {
-          const targetUrl = `${newUrl}?lat=${lat}&lng=${lng}`;
+          const zoom = map ? map.getZoom() : "";
+          const zoomParam = Number.isFinite(zoom) ? `&zoom=${zoom}` : "";
+          const targetUrl = `${newUrl}?lat=${lat}&lng=${lng}${zoomParam}`;
           if (window.openReportModal) {
             window.openReportModal(targetUrl);
           } else {

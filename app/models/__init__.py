@@ -11,6 +11,8 @@ from .post_edit_request import PostEditRequest
 from .comment import Comment
 from .chat_message import ChatMessage
 from .chat_presence import ChatPresence
+from .discussion_post import DiscussionPost
+from .discussion_comment import DiscussionComment
 
 __all__ = [
     "User",
@@ -26,4 +28,6 @@ __all__ = [
     "Comment",
     "ChatMessage",
     "ChatPresence",
+    "DiscussionPost",
+    "DiscussionComment",
 ]

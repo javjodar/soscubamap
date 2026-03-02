@@ -5,6 +5,7 @@ from .blueprints.map import map_bp
 from .blueprints.admin import admin_bp
 from .blueprints.moderation import moderation_bp
 from .blueprints.api import api_bp
+from .blueprints.discussions import discussions_bp
 
 
 def create_app(config_object="config.settings.Config"):
@@ -20,5 +21,6 @@ def create_app(config_object="config.settings.Config"):
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(moderation_bp, url_prefix="/moderacion")
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(discussions_bp)
 
     return app

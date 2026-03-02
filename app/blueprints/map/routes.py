@@ -200,6 +200,7 @@ def new_post():
 
     preset_lat = request.args.get("lat", "")
     preset_lng = request.args.get("lng", "")
+    preset_zoom = request.args.get("zoom", "")
     moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
     moderation_enabled = True
     if moderation_setting:
@@ -210,6 +211,7 @@ def new_post():
         categories=categories,
         preset_lat=preset_lat,
         preset_lng=preset_lng,
+        preset_zoom=preset_zoom,
         moderation_enabled=moderation_enabled,
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),

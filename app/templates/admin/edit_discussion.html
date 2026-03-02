@@ -1,0 +1,65 @@
+{% extends "shared/base.html" %}
+{% block title %} | Editar discusión{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Editar discusión</h1>
+  <p class="muted">Autor: {{ post.author_label }} · {{ post.created_at }}</p>
+
+  <form class="form-grid" method="post">
+    <label>
+      Título
+      <input type="text" name="title" value="{{ post.title }}" required />
+    </label>
+    <label>
+      Contenido (Markdown)
+      <textarea name="body" rows="10" required>{{ post.body }}</textarea>
+    </label>
+    <div class="links-group">
+      <div class="links-header">
+        <span>Enlaces de interés</span>
+        <button type="button" class="btn-secondary" id="addAdminDiscussionLink">+ Agregar</button>
+      </div>
+      <div id="adminDiscussionLinks" class="links-list">
+        {% for link in links %}
+          <input type="url" name="links[]" value="{{ link }}" />
+        {% endfor %}
+        {% if links|length == 0 %}
+          <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
+        {% endif %}
+      </div>
+    </div>
+    {% if images and images|length %}
+      <div class="media-section">
+        <div class="media-title">Imágenes</div>
+        <div class="media-grid">
+          {% for item in images %}
+            <div class="discussion-media-item">
+              <div class="media-thumb">
+                <img src="{{ item.url }}" alt="Imagen de discusión" />
+              </div>
+              {% if item.caption %}
+                <div class="muted">{{ item.caption }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+    <button type="submit" class="btn-primary">Guardar cambios</button>
+  </form>
+</section>
+
+<script>
+  const addBtn = document.getElementById("addAdminDiscussionLink");
+  const list = document.getElementById("adminDiscussionLinks");
+  if (addBtn && list) {
+    addBtn.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "url";
+      input.name = "links[]";
+      input.placeholder = "https://ejemplo.com/fuente";
+      list.appendChild(input);
+    });
+  }
+</script>
+{% endblock %}

@@ -20,6 +20,8 @@ from app.services.media_upload import (
 )
 from app.models.chat_message import ChatMessage
 from app.models.chat_presence import ChatPresence
+from app.models.discussion_post import DiscussionPost
+from app.models.discussion_comment import DiscussionComment
 
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
@@ -161,15 +163,29 @@ def vote_comment(comment_id):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
     cookie_key = f"comment_vote_{comment_id}"
-    if request.cookies.get(cookie_key):
-        return jsonify(
-            {
-                "ok": False,
-                "upvotes": comment.upvotes or 0,
-                "downvotes": comment.downvotes or 0,
-                "score": (comment.upvotes or 0) - (comment.downvotes or 0),
-            }
+    prev = request.cookies.get(cookie_key)
+    prev_val = None
+    if prev in ("1", "-1"):
+        prev_val = int(prev)
+
+    if prev_val == value:
+        resp = make_response(
+            jsonify(
+                {
+                    "ok": True,
+                    "upvotes": comment.upvotes or 0,
+                    "downvotes": comment.downvotes or 0,
+                    "score": (comment.upvotes or 0) - (comment.downvotes or 0),
+                }
+            )
         )
+        resp.set_cookie(cookie_key, str(value))
+        return resp
+
+    if prev_val == 1:
+        comment.upvotes = max((comment.upvotes or 0) - 1, 0)
+    elif prev_val == -1:
+        comment.downvotes = max((comment.downvotes or 0) - 1, 0)
 
     if value == 1:
         comment.upvotes = (comment.upvotes or 0) + 1
@@ -187,7 +203,113 @@ def vote_comment(comment_id):
             }
         )
     )
-    resp.set_cookie(cookie_key, "1")
+    resp.set_cookie(cookie_key, str(value))
+    return resp
+
+
+@api_bp.route("/discusiones/<int:post_id>/vote", methods=["POST"])
+def vote_discussion_post(post_id):
+    post = DiscussionPost.query.get_or_404(post_id)
+    data = request.get_json(silent=True) or {}
+    value = data.get("value")
+    if value not in (1, -1):
+        return jsonify({"ok": False, "error": "Voto inválido."}), 400
+
+    cookie_key = f"discussion_post_vote_{post_id}"
+    prev = request.cookies.get(cookie_key)
+    prev_val = None
+    if prev in ("1", "-1"):
+        prev_val = int(prev)
+
+    if prev_val == value:
+        resp = make_response(
+            jsonify(
+                {
+                    "ok": True,
+                    "upvotes": post.upvotes or 0,
+                    "downvotes": post.downvotes or 0,
+                    "score": (post.upvotes or 0) - (post.downvotes or 0),
+                }
+            )
+        )
+        resp.set_cookie(cookie_key, str(value))
+        return resp
+
+    if prev_val == 1:
+        post.upvotes = max((post.upvotes or 0) - 1, 0)
+    elif prev_val == -1:
+        post.downvotes = max((post.downvotes or 0) - 1, 0)
+
+    if value == 1:
+        post.upvotes = (post.upvotes or 0) + 1
+    else:
+        post.downvotes = (post.downvotes or 0) + 1
+    db.session.commit()
+
+    resp = make_response(
+        jsonify(
+            {
+                "ok": True,
+                "upvotes": post.upvotes or 0,
+                "downvotes": post.downvotes or 0,
+                "score": (post.upvotes or 0) - (post.downvotes or 0),
+            }
+        )
+    )
+    resp.set_cookie(cookie_key, str(value))
+    return resp
+
+
+@api_bp.route("/discusiones/comentarios/<int:comment_id>/vote", methods=["POST"])
+def vote_discussion_comment(comment_id):
+    comment = DiscussionComment.query.get_or_404(comment_id)
+    data = request.get_json(silent=True) or {}
+    value = data.get("value")
+    if value not in (1, -1):
+        return jsonify({"ok": False, "error": "Voto inválido."}), 400
+
+    cookie_key = f"discussion_comment_vote_{comment_id}"
+    prev = request.cookies.get(cookie_key)
+    prev_val = None
+    if prev in ("1", "-1"):
+        prev_val = int(prev)
+
+    if prev_val == value:
+        resp = make_response(
+            jsonify(
+                {
+                    "ok": True,
+                    "upvotes": comment.upvotes or 0,
+                    "downvotes": comment.downvotes or 0,
+                    "score": (comment.upvotes or 0) - (comment.downvotes or 0),
+                }
+            )
+        )
+        resp.set_cookie(cookie_key, str(value))
+        return resp
+
+    if prev_val == 1:
+        comment.upvotes = max((comment.upvotes or 0) - 1, 0)
+    elif prev_val == -1:
+        comment.downvotes = max((comment.downvotes or 0) - 1, 0)
+
+    if value == 1:
+        comment.upvotes = (comment.upvotes or 0) + 1
+    else:
+        comment.downvotes = (comment.downvotes or 0) + 1
+    db.session.commit()
+
+    resp = make_response(
+        jsonify(
+            {
+                "ok": True,
+                "upvotes": comment.upvotes or 0,
+                "downvotes": comment.downvotes or 0,
+                "score": (comment.upvotes or 0) - (comment.downvotes or 0),
+            }
+        )
+    )
+    resp.set_cookie(cookie_key, str(value))
     return resp
 
 

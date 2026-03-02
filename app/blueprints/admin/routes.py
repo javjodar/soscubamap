@@ -4,6 +4,8 @@ from flask_login import login_required
 from app.services.authz import role_required
 from app.services.settings import get_setting, set_setting
 from app.models.post import Post
+from app.models.discussion_post import DiscussionPost
+from app.models.discussion_comment import DiscussionComment
 from app.models.location_report import LocationReport
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
@@ -15,6 +17,9 @@ from app.services.geo_lookup import lookup_location, list_provinces, municipalit
 from flask_login import current_user
 import json
 from decimal import Decimal
+from sqlalchemy import func
+from app.services.markdown_utils import render_markdown
+from app.services.media_upload import parse_media_json
 from . import admin_bp
 
 
@@ -67,6 +72,69 @@ def reports():
 def location_reports():
     reports = LocationReport.query.order_by(LocationReport.created_at.desc()).all()
     return render_template("admin/location_reports.html", reports=reports)
+
+
+@admin_bp.route("/discusiones")
+@login_required
+@role_required("administrador")
+def discussions():
+    posts = DiscussionPost.query.order_by(DiscussionPost.created_at.desc()).all()
+    counts = dict(
+        db.session.query(DiscussionComment.post_id, func.count(DiscussionComment.id))
+        .group_by(DiscussionComment.post_id)
+        .all()
+    )
+    return render_template("admin/discussions.html", posts=posts, comment_counts=counts)
+
+
+@admin_bp.route("/discusiones/<int:post_id>/editar", methods=["GET", "POST"])
+@login_required
+@role_required("administrador")
+def edit_discussion(post_id):
+    post = DiscussionPost.query.get_or_404(post_id)
+    links = []
+    if post.links_json:
+        try:
+            links = json.loads(post.links_json)
+        except Exception:
+            links = []
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        links_list = request.form.getlist("links[]")
+        links_list = [link.strip() for link in links_list if link.strip()]
+
+        if not title or not body:
+            flash("Título y contenido son obligatorios.", "error")
+            return redirect(url_for("admin.edit_discussion", post_id=post.id))
+
+        post.title = title
+        post.body = body
+        post.body_html = render_markdown(body)
+        post.links_json = json.dumps(links_list) if links_list else None
+        db.session.commit()
+        flash("Discusión actualizada.", "success")
+        return redirect(url_for("admin.discussions"))
+
+    images = parse_media_json(post.images_json)
+    return render_template(
+        "admin/edit_discussion.html",
+        post=post,
+        links=links,
+        images=images,
+    )
+
+
+@admin_bp.route("/discusiones/<int:post_id>/eliminar", methods=["POST"])
+@login_required
+@role_required("administrador")
+def delete_discussion(post_id):
+    post = DiscussionPost.query.get_or_404(post_id)
+    db.session.delete(post)
+    db.session.commit()
+    flash("Discusión eliminada.", "success")
+    return redirect(url_for("admin.discussions"))
 
 
 @admin_bp.route("/reportes/<int:post_id>/estado", methods=["POST"])

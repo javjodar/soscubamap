@@ -76,13 +76,15 @@ window.initDrawMap = function () {
 
   const lat = parseFloat(mapEl.dataset.lat);
   const lng = parseFloat(mapEl.dataset.lng);
+  const zoom = parseFloat(mapEl.dataset.zoom);
   const hasPreset = Number.isFinite(lat) && Number.isFinite(lng);
   const center = hasPreset ? { lat, lng } : { lat: 21.521757, lng: -77.781167 };
+  const hasZoom = Number.isFinite(zoom);
 
   drawMap = new google.maps.Map(mapEl, {
     center,
-    zoom: hasPreset ? 14 : 7,
-    minZoom: 7,
+    zoom: hasZoom ? zoom : hasPreset ? 14 : 7,
+    minZoom: hasZoom ? Math.min(7, zoom) : 7,
     mapId: mapEl.dataset.mapId || undefined,
     mapTypeId: "hybrid",
     disableDefaultUI: true,
