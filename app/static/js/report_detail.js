@@ -360,10 +360,10 @@ window.initDetailMap = function () {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
   const CUBA_BOUNDS = {
-    north: 24.8,
-    south: 18.6,
-    west: -87.0,
-    east: -72.4,
+    north: 24.2,
+    south: 19.0,
+    west: -86.2,
+    east: -73.0,
   };
 
   const map = new google.maps.Map(mapEl, {

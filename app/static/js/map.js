@@ -14,10 +14,10 @@ let mapImageModalCaption;
 let pendingMarkers = [];
 
 const CUBA_BOUNDS = {
-  north: 24.8,
-  south: 18.6,
-  west: -87.0,
-  east: -72.4,
+  north: 24.2,
+  south: 19.0,
+  west: -86.2,
+  east: -73.0,
 };
 
 document.addEventListener("DOMContentLoaded", () => {
