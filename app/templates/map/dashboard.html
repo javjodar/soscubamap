@@ -40,6 +40,21 @@
         {% endfor %}
       </div>
     </div>
+    <label>
+      Provincia
+      <select id="provinceFilter">
+        <option value="">Todas</option>
+        {% for prov in provinces %}
+          <option value="{{ prov }}">{{ prov }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Municipio
+      <select id="municipalityFilter">
+        <option value="">Todos</option>
+      </select>
+    </label>
   </div>
 </section>
 
@@ -133,6 +148,9 @@
 
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script>
+  window.CUBA_MUNICIPALITIES = {{ municipalities_map|tojson }};
+</script>
 {% if google_maps_api_key %}
 <script async
   src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=marker,places&v=beta">

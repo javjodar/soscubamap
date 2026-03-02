@@ -205,12 +205,12 @@ body {
 
 .filter-group {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .filter-label {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .filter-checkboxes {
@@ -222,11 +222,9 @@ body {
 .checkbox-item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--text);
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
@@ -234,10 +232,6 @@ body {
   accent-color: var(--accent);
 }
 
-.checkbox-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .filter-controls input {
   width: 100%;

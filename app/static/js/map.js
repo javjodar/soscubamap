@@ -81,6 +81,12 @@ function getSelectedCategoryIds() {
   return selected;
 }
 
+function getSelectedLocationFilters() {
+  const province = document.getElementById("provinceFilter")?.value || "";
+  const municipality = document.getElementById("municipalityFilter")?.value || "";
+  return { province, municipality };
+}
+
 async function loadPosts() {
   const res = await fetch(`/api/posts`);
   return await res.json();
@@ -315,9 +321,17 @@ window.handleNewReport = function (payload) {
 
 async function applyFilters() {
   const selected = getSelectedCategoryIds();
-  const filtered = selected.size
+  const { province, municipality } = getSelectedLocationFilters();
+  let filtered = selected.size
     ? allPosts.filter((post) => selected.has(post.category?.id))
     : [];
+
+  if (province) {
+    filtered = filtered.filter((post) => post.province === province);
+  }
+  if (municipality) {
+    filtered = filtered.filter((post) => post.municipality === municipality);
+  }
   updateLegendCounts(allPosts);
   renderMarkers(filtered);
 }
@@ -463,6 +477,35 @@ window.initMap = async function () {
   filters.forEach((checkbox) => {
     checkbox.addEventListener("change", applyFilters);
   });
+
+  const provinceSelect = document.getElementById("provinceFilter");
+  const municipalitySelect = document.getElementById("municipalityFilter");
+  const municipalities = window.CUBA_MUNICIPALITIES || {};
+
+  const renderMunicipalities = (province, selected) => {
+    if (!municipalitySelect) return;
+    let items = [];
+    if (province && municipalities[province]) {
+      items = municipalities[province];
+    } else {
+      Object.values(municipalities).forEach((list) => {
+        items = items.concat(list);
+      });
+      items = Array.from(new Set(items)).sort();
+    }
+    municipalitySelect.innerHTML =
+      `<option value="">Todos</option>` +
+      items.map((m) => `<option value="${m}" ${m === selected ? "selected" : ""}>${m}</option>`).join("");
+  };
+
+  if (provinceSelect && municipalitySelect) {
+    renderMunicipalities(provinceSelect.value, municipalitySelect.value);
+    provinceSelect.addEventListener("change", () => {
+      renderMunicipalities(provinceSelect.value, "");
+      applyFilters();
+    });
+    municipalitySelect.addEventListener("change", applyFilters);
+  }
 
   clickInfo = new google.maps.InfoWindow();
   map.addListener("click", (event) => {
