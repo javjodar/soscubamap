@@ -35,6 +35,43 @@
       <a class="btn-primary" href="{{ url_for('map.dashboard', lat=post.latitude, lng=post.longitude) }}">Ver en el mapa</a>
     </div>
 
+    <div class="media-section">
+      <div class="media-header">
+        <div class="media-title">Imágenes</div>
+        {% if moderation_enabled %}
+          <div class="media-note">Las imágenes nuevas pueden requerir moderación.</div>
+        {% endif %}
+      </div>
+      <div class="media-grid" id="mediaGrid">
+        {% if media_urls %}
+          {% for url in media_urls %}
+            <button class="media-thumb" type="button" data-image="{{ url }}">
+              <img src="{{ url }}" alt="Imagen del reporte" />
+            </button>
+          {% endfor %}
+        {% else %}
+          <div class="muted">Aún no hay imágenes para este reporte.</div>
+        {% endif %}
+      </div>
+      <form id="mediaUploadForm" class="media-form" data-post-id="{{ post.id }}">
+        <label>
+          Subir imágenes (máx {{ config.IMAGE_MAX_PER_SUBMIT }}, {{ config.IMAGE_MAX_MB }}MB c/u)
+          <input
+            type="file"
+            name="images"
+            id="mediaInput"
+            multiple
+            accept=".jpg,.jpeg,.png,.webp,.heic,image/heic,image/heif"
+            data-max-files="{{ config.IMAGE_MAX_PER_SUBMIT }}"
+            data-max-mb="{{ config.IMAGE_MAX_MB }}"
+            data-allowed-ext="{{ config.IMAGE_ALLOWED_EXTENSIONS }}"
+          />
+        </label>
+        <button type="submit" class="btn-primary">Subir imágenes</button>
+        <div class="media-status" id="mediaStatus"></div>
+      </form>
+    </div>
+
     <div
       id="detailMap"
       class="draw-map"
@@ -55,6 +92,14 @@
     </div>
   </div>
 </section>
+
+<div id="imageModal" class="image-modal" aria-hidden="true" data-allow-zoom="1">
+  <div class="image-modal-backdrop" data-close-image></div>
+  <div class="image-modal-content">
+    <button class="image-modal-close" type="button" data-close-image>&times;</button>
+    <img id="imageModalImg" src="" alt="Imagen ampliada" />
+  </div>
+</div>
 
 <script src="{{ url_for('static', filename='js/report_detail.js') }}"></script>
 {% if config.GOOGLE_MAPS_API_KEY %}

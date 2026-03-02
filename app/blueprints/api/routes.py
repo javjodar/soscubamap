@@ -8,6 +8,11 @@ from app.extensions import db
 from app.models.comment import Comment
 from app.models.user import User
 from app.models.role import Role
+from app.models.media import Media
+from app.models.post_revision import PostRevision
+from app.models.post_edit_request import PostEditRequest
+from app.models.site_setting import SiteSetting
+from app.services.media_upload import validate_files, upload_files, media_json_from_post, get_media_urls
 from app.models.chat_message import ChatMessage
 from app.models.chat_presence import ChatPresence
 
@@ -177,6 +182,72 @@ def vote_comment(comment_id):
     )
     resp.set_cookie(cookie_key, "1")
     return resp
+
+
+@api_bp.route("/posts/<int:post_id>/media", methods=["POST"])
+def upload_post_media(post_id):
+    post = Post.query.get_or_404(post_id)
+    files = request.files.getlist("images")
+    ok, error = validate_files(files)
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+
+    moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+    moderation_enabled = True
+    if moderation_setting:
+        moderation_enabled = moderation_setting.value == "true"
+
+    urls = upload_files(files)
+    if not urls:
+        return jsonify({"ok": False, "error": "No se pudo subir la imagen."}), 400
+
+    if moderation_enabled:
+        combined = get_media_urls(post) + urls
+        edit = PostEditRequest(
+            post_id=post.id,
+            editor_id=current_user.id if current_user.is_authenticated else None,
+            editor_label=f"Anon-{current_user.anon_code}" if current_user.is_authenticated and current_user.anon_code else "Anon",
+            reason="Imagen añadida",
+            title=post.title,
+            description=post.description,
+            latitude=post.latitude,
+            longitude=post.longitude,
+            address=post.address,
+            province=post.province,
+            municipality=post.municipality,
+            category_id=post.category_id,
+            polygon_geojson=post.polygon_geojson,
+            links_json=post.links_json,
+            media_json=json.dumps(combined),
+        )
+        db.session.add(edit)
+        db.session.commit()
+        return jsonify({"ok": True, "status": "pending"})
+
+    revision = PostRevision(
+        post_id=post.id,
+        editor_id=current_user.id if current_user.is_authenticated else None,
+        editor_label=f"Anon-{current_user.anon_code}" if current_user.is_authenticated and current_user.anon_code else "Anon",
+        reason="Imagen añadida",
+        title=post.title,
+        description=post.description,
+        latitude=post.latitude,
+        longitude=post.longitude,
+        address=post.address,
+        province=post.province,
+        municipality=post.municipality,
+        category_id=post.category_id,
+        polygon_geojson=post.polygon_geojson,
+        links_json=post.links_json,
+        media_json=media_json_from_post(post),
+    )
+    db.session.add(revision)
+
+    for url in urls:
+        db.session.add(Media(post_id=post.id, file_url=url))
+    db.session.commit()
+
+    return jsonify({"ok": True, "status": "approved", "media": get_media_urls(post)})
 
 
 @api_bp.route("/chat", methods=["GET", "POST"])

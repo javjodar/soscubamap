@@ -25,6 +25,15 @@
           </ul>
         </div>
       {% endif %}
+      {% if media_urls %}
+        <div><strong>Imágenes:</strong>
+          <div class="history-media">
+            {% for url in media_urls %}
+              <img src="{{ url }}" alt="Imagen del reporte" />
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
 
@@ -48,6 +57,15 @@
                 <ul class="history-links">
                   {% for link in rev_links[rev.id] %}<li>{{ link }}</li>{% endfor %}
                 </ul>
+              </div>
+            {% endif %}
+            {% if rev_media[rev.id] %}
+              <div><strong>Imágenes:</strong>
+                <div class="history-media">
+                  {% for url in rev_media[rev.id] %}
+                    <img src="{{ url }}" alt="Imagen del reporte" />
+                  {% endfor %}
+                </div>
               </div>
             {% endif %}
             {% if current_user.is_authenticated and current_user.has_role('administrador') %}

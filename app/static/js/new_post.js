@@ -229,6 +229,52 @@ function setupProvinceMunicipality() {
   });
 }
 
+function setupImageValidation() {
+  const input = document.querySelector('input[name="images"]');
+  const status = document.getElementById("imageStatus");
+  if (!input) return;
+
+  const maxFiles = parseInt(input.dataset.maxFiles || "3", 10);
+  const maxMb = parseInt(input.dataset.maxMb || "2", 10);
+  const allowedExt = (input.dataset.allowedExt || "jpg,jpeg,png,webp,heic")
+    .split(",")
+    .map((ext) => ext.trim().toLowerCase())
+    .filter(Boolean);
+
+  const maxBytes = maxMb * 1024 * 1024;
+
+  const showError = (message) => {
+    if (!status) return;
+    status.textContent = message;
+  };
+
+  input.addEventListener("change", () => {
+    if (!input.files) return;
+    if (input.files.length > maxFiles) {
+      showError(`Máximo ${maxFiles} imágenes por envío.`);
+      input.value = "";
+      return;
+    }
+
+    for (const file of Array.from(input.files)) {
+      const name = file.name || "";
+      const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+      if (!allowedExt.includes(ext)) {
+        showError(`Formato no permitido: ${ext || "desconocido"}.`);
+        input.value = "";
+        return;
+      }
+      if (file.size > maxBytes) {
+        showError(`Cada imagen debe ser <= ${maxMb}MB.`);
+        input.value = "";
+        return;
+      }
+    }
+
+    if (status) status.textContent = "";
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const select = document.getElementById("categorySelect");
   if (select) {
@@ -237,4 +283,5 @@ document.addEventListener("DOMContentLoaded", () => {
   applyPlaceholders();
   setupLinks();
   setupProvinceMunicipality();
+  setupImageValidation();
 });

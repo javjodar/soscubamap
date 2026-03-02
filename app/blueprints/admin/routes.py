@@ -9,6 +9,8 @@ from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.category import Category
 from app.extensions import db
+from app.models.media import Media
+from app.services.media_upload import media_json_from_post
 from app.services.geo_lookup import lookup_location, list_provinces, municipalities_map
 from flask_login import current_user
 import json
@@ -176,6 +178,7 @@ def edit_report(post_id):
             category_id=post.category_id,
             polygon_geojson=post.polygon_geojson,
             links_json=post.links_json,
+            media_json=media_json_from_post(post),
         )
         db.session.add(revision)
 
@@ -231,6 +234,7 @@ def restore_revision(post_id, revision_id):
         category_id=post.category_id,
         polygon_geojson=post.polygon_geojson,
         links_json=post.links_json,
+        media_json=media_json_from_post(post),
     )
     db.session.add(snapshot)
 
@@ -245,6 +249,14 @@ def restore_revision(post_id, revision_id):
         post.category_id = revision.category_id
     post.polygon_geojson = revision.polygon_geojson
     post.links_json = revision.links_json
+    if revision.media_json:
+        try:
+            media_urls = json.loads(revision.media_json) or []
+        except Exception:
+            media_urls = []
+        Media.query.filter_by(post_id=post.id).delete()
+        for url in media_urls:
+            db.session.add(Media(post_id=post.id, file_url=url))
     db.session.commit()
 
     flash("Reporte restaurado a una versión anterior.", "success")

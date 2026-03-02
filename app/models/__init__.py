@@ -9,6 +9,8 @@ from .location_report import LocationReport
 from .post_revision import PostRevision
 from .post_edit_request import PostEditRequest
 from .comment import Comment
+from .chat_message import ChatMessage
+from .chat_presence import ChatPresence
 
 __all__ = [
     "User",
@@ -22,4 +24,6 @@ __all__ = [
     "PostRevision",
     "PostEditRequest",
     "Comment",
+    "ChatMessage",
+    "ChatPresence",
 ]

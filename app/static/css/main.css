@@ -596,6 +596,61 @@ body {
   align-items: center;
 }
 
+.media-section {
+  display: grid;
+  gap: 12px;
+}
+
+.media-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.media-title {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.media-note {
+  font-size: 11px;
+  color: var(--accent-2);
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.media-thumb {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0b1014;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.media-form {
+  display: grid;
+  gap: 10px;
+}
+
+.media-status {
+  font-size: 12px;
+  color: var(--accent);
+}
+
 .verify-count {
   font-weight: 700;
   color: var(--accent);
@@ -1003,6 +1058,55 @@ textarea {
   color: var(--accent);
 }
 
+.image-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.image-modal.open {
+  display: flex;
+}
+
+.image-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.image-modal-content {
+  position: relative;
+  z-index: 1;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: #0b1014;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.image-modal-content img {
+  max-width: 90vw;
+  max-height: 80vh;
+  display: block;
+}
+
+.image-modal-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: #0f151a;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
 .btn-secondary {
   background: transparent;
   color: var(--text);
@@ -1209,6 +1313,21 @@ textarea {
   margin: 8px 0 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.history-media {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-media img {
+  width: 90px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
 @media (max-width: 900px) {

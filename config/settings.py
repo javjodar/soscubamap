@@ -15,6 +15,15 @@ class Config:
     DEFAULT_LANGUAGE = "es"
     GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
     GOOGLE_MAPS_MAP_ID = os.getenv("GOOGLE_MAPS_MAP_ID", "")
+    CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+    CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "")
+    CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "")
+    IMAGE_MAX_MB = int(os.getenv("IMAGE_MAX_MB", "2"))
+    IMAGE_MAX_PER_SUBMIT = int(os.getenv("IMAGE_MAX_PER_SUBMIT", "3"))
+    IMAGE_ALLOWED_EXTENSIONS = os.getenv(
+        "IMAGE_ALLOWED_EXTENSIONS",
+        "jpg,jpeg,png,webp,heic",
+    )
     GEOJSON_PROVINCES_PATH = os.getenv("GEOJSON_PROVINCES_PATH", "")
     GEOJSON_MUNICIPALITIES_PATH = os.getenv("GEOJSON_MUNICIPALITIES_PATH", "")
     GEOJSON_PROVINCE_KEYS = os.getenv("GEOJSON_PROVINCE_KEYS", "")

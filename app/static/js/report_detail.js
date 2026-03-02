@@ -124,6 +124,113 @@ document.addEventListener("DOMContentLoaded", async () => {
   const items = await loadComments(postId);
   renderComments(postId, items);
   setupCopyLink();
+
+  const mediaForm = document.getElementById("mediaUploadForm");
+  const mediaInput = document.getElementById("mediaInput");
+  const mediaStatus = document.getElementById("mediaStatus");
+  const mediaGrid = document.getElementById("mediaGrid");
+  const modal = document.getElementById("imageModal");
+  const modalImg = document.getElementById("imageModalImg");
+
+  const bindThumbnails = () => {
+    document.querySelectorAll(".media-thumb").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const src = btn.getAttribute("data-image");
+        if (!src || !modal || !modalImg) return;
+        modalImg.src = src;
+        modal.setAttribute("aria-hidden", "false");
+        modal.classList.add("open");
+      });
+    });
+  };
+
+  const closeModal = () => {
+    if (!modal || !modalImg) return;
+    modal.setAttribute("aria-hidden", "true");
+    modal.classList.remove("open");
+    modalImg.src = "";
+  };
+
+  document.querySelectorAll("[data-close-image]").forEach((btn) => {
+    btn.addEventListener("click", closeModal);
+  });
+
+  if (mediaForm && mediaInput) {
+    mediaForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const files = mediaInput.files;
+      if (!files || files.length === 0) return;
+
+      const maxFiles = parseInt(mediaInput.dataset.maxFiles || "3", 10);
+      const maxMb = parseInt(mediaInput.dataset.maxMb || "2", 10);
+      const allowedExt = (mediaInput.dataset.allowedExt || "jpg,jpeg,png,webp,heic")
+        .split(",")
+        .map((ext) => ext.trim().toLowerCase())
+        .filter(Boolean);
+      const maxBytes = maxMb * 1024 * 1024;
+
+      if (files.length > maxFiles) {
+        if (mediaStatus) mediaStatus.textContent = `Máximo ${maxFiles} imágenes por envío.`;
+        mediaInput.value = "";
+        return;
+      }
+
+      for (const file of Array.from(files)) {
+        const name = file.name || "";
+        const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+        if (!allowedExt.includes(ext)) {
+          if (mediaStatus) mediaStatus.textContent = `Formato no permitido: ${ext || "desconocido"}.`;
+          mediaInput.value = "";
+          return;
+        }
+        if (file.size > maxBytes) {
+          if (mediaStatus) mediaStatus.textContent = `Cada imagen debe ser <= ${maxMb}MB.`;
+          mediaInput.value = "";
+          return;
+        }
+      }
+
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("images", file));
+
+      if (mediaStatus) mediaStatus.textContent = "Subiendo imágenes...";
+      const res = await fetch(`/api/posts/${postId}/media`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || data?.ok === false) {
+        if (mediaStatus) mediaStatus.textContent = data?.error || "Error al subir.";
+        return;
+      }
+
+      if (data.status === "pending") {
+        if (mediaStatus) mediaStatus.textContent = "Enviado a moderación.";
+      } else {
+        if (mediaStatus) mediaStatus.textContent = "Imágenes agregadas.";
+      }
+
+      if (Array.isArray(data.media) && mediaGrid) {
+        mediaGrid.innerHTML = data.media
+          .map(
+            (url) => `
+              <button class="media-thumb" type="button" data-image="${url}">
+                <img src="${url}" alt="Imagen del reporte" />
+              </button>
+            `
+          )
+          .join("");
+        bindThumbnails();
+      }
+
+      mediaInput.value = "";
+      setTimeout(() => {
+        if (mediaStatus) mediaStatus.textContent = "";
+      }, 2000);
+    });
+  }
+
+  bindThumbnails();
 });
 
 window.initDetailMap = function () {

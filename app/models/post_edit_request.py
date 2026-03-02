@@ -23,6 +23,7 @@ class PostEditRequest(db.Model):
     category_id = db.Column(db.Integer)
     polygon_geojson = db.Column(db.Text)
     links_json = db.Column(db.Text)
+    media_json = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

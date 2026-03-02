@@ -12,7 +12,9 @@ from app.models.site_setting import SiteSetting
 from app.models.location_report import LocationReport
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
+from app.models.media import Media
 from app.services.geo_lookup import lookup_location, list_provinces, list_municipalities, municipalities_map
+from app.services.media_upload import media_json_from_post, get_media_urls, validate_files, upload_files
 from app.extensions import db
 from . import map_bp
 
@@ -80,12 +82,19 @@ def new_post():
         province = request.form.get("province", "").strip()
         municipality = request.form.get("municipality", "").strip()
         polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        images = request.files.getlist("images")
         links = request.form.getlist("links[]")
         links = [link.strip() for link in links if link.strip()]
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("map.new_post"))
+        if images:
+            ok, error = validate_files(images)
+            if not ok:
+                flash(error, "error")
+                return redirect(url_for("map.new_post"))
+
         try:
             lat = Decimal(latitude)
             lng = Decimal(longitude)
@@ -134,6 +143,12 @@ def new_post():
         post.status = "pending" if moderation_enabled else "approved"
         db.session.add(post)
         db.session.commit()
+
+        if images:
+            media_urls = upload_files(images)
+            for url in media_urls:
+                db.session.add(Media(post_id=post.id, file_url=url))
+            db.session.commit()
 
         payload = {
             "id": post.id,
@@ -308,6 +323,7 @@ def edit_report_public(post_id):
             category_id=post.category_id,
             polygon_geojson=post.polygon_geojson,
             links_json=post.links_json,
+            media_json=media_json_from_post(post),
         )
         db.session.add(revision)
 
@@ -358,11 +374,17 @@ def report_detail(post_id):
             links = []
 
     anon_label = f"Anon-{post.author.anon_code}" if post.author and post.author.anon_code else "Anon"
+    moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+    moderation_enabled = True
+    if moderation_setting:
+        moderation_enabled = moderation_setting.value == "true"
     return render_template(
         "map/report_detail.html",
         post=post,
         links=links,
         anon_label=anon_label,
+        media_urls=get_media_urls(post),
+        moderation_enabled=moderation_enabled,
     )
 
 
@@ -380,6 +402,7 @@ def post_history(post_id):
         except Exception:
             links = []
     rev_links = {}
+    rev_media = {}
     for rev in revisions:
         if rev.links_json:
             try:
@@ -388,6 +411,13 @@ def post_history(post_id):
                 rev_links[rev.id] = []
         else:
             rev_links[rev.id] = []
+        if rev.media_json:
+            try:
+                rev_media[rev.id] = json.loads(rev.media_json)
+            except Exception:
+                rev_media[rev.id] = []
+        else:
+            rev_media[rev.id] = []
 
     return render_template(
         "map/post_history.html",
@@ -396,6 +426,8 @@ def post_history(post_id):
         links=links,
         rev_links=rev_links,
         latest_reason=latest_reason,
+        media_urls=get_media_urls(post),
+        rev_media=rev_media,
     )
 
 

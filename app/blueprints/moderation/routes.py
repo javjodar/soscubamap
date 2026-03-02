@@ -5,6 +5,9 @@ from app.extensions import db
 from app.models.post import Post
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
+from app.models.media import Media
+from app.services.media_upload import media_json_from_post
+import json
 from app.services.authz import role_required
 from . import moderation_bp
 
@@ -62,6 +65,7 @@ def approve_edit(edit_id):
         category_id=post.category_id,
         polygon_geojson=post.polygon_geojson,
         links_json=post.links_json,
+        media_json=media_json_from_post(post),
     )
     db.session.add(revision)
 
@@ -76,6 +80,14 @@ def approve_edit(edit_id):
         post.category_id = edit.category_id
     post.polygon_geojson = edit.polygon_geojson
     post.links_json = edit.links_json
+    if edit.media_json:
+        try:
+            media_urls = json.loads(edit.media_json) or []
+        except Exception:
+            media_urls = []
+        Media.query.filter_by(post_id=post.id).delete()
+        for url in media_urls:
+            db.session.add(Media(post_id=post.id, file_url=url))
 
     edit.status = "approved"
     db.session.commit()

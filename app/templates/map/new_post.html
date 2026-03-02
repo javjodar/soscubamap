@@ -20,7 +20,7 @@
     <div class="draw-help">Usa el ícono de polígono para dibujar. Puedes borrar y volver a dibujar.</div>
   </div>
 
-  <form class="form-grid" method="post">
+  <form class="form-grid" method="post" enctype="multipart/form-data">
     <label>
       Título
       <input type="text" name="title" id="titleInput" placeholder="Ej: Detención arbitraria" />
@@ -72,6 +72,19 @@
     <label>
       Imagen (URL)
       <input type="text" name="image_url" />
+    </label>
+    <label>
+      Imágenes (máx {{ config.IMAGE_MAX_PER_SUBMIT }}, {{ config.IMAGE_MAX_MB }}MB c/u)
+      <input
+        type="file"
+        name="images"
+        multiple
+        accept=".jpg,.jpeg,.png,.webp,.heic,image/heic,image/heif"
+        data-max-files="{{ config.IMAGE_MAX_PER_SUBMIT }}"
+        data-max-mb="{{ config.IMAGE_MAX_MB }}"
+        data-allowed-ext="{{ config.IMAGE_ALLOWED_EXTENSIONS }}"
+      />
+      <div class="media-status" id="imageStatus"></div>
     </label>
     <div class="links-group">
       <div class="links-header">
