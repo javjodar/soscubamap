@@ -224,11 +224,19 @@ body {
   align-items: center;
   gap: 8px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .checkbox-item input {
   accent-color: var(--accent);
+}
+
+.checkbox-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .filter-controls input {
