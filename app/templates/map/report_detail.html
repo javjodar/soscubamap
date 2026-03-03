@@ -32,6 +32,14 @@
     </div>
 
     <div class="report-actions">
+      {% if current_user.is_authenticated and (current_user.has_role('moderador') or current_user.has_role('administrador')) and post.status == 'pending' %}
+        <form method="post" action="{{ url_for('moderation.approve', post_id=post.id) }}">
+          <button class="btn-primary" type="submit">Aprobar</button>
+        </form>
+        <form method="post" action="{{ url_for('moderation.reject', post_id=post.id) }}">
+          <button class="btn-secondary" type="submit">Rechazar</button>
+        </form>
+      {% endif %}
       <button class="btn-primary" id="verifyBtn">Verificar</button>
       <span class="verify-count" id="verifyCount">{{ post.verify_count or 0 }}</span>
       <button class="btn-secondary" id="copyLinkBtn">Copiar enlace</button>

@@ -1732,6 +1732,15 @@ textarea {
   background: #0f151a;
 }
 
+.pending-link {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.pending-link:hover {
+  color: var(--accent);
+}
+
 .bulk-cell {
   display: flex;
   align-items: flex-start;

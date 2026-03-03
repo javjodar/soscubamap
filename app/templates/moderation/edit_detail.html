@@ -1,0 +1,68 @@
+{% extends "shared/base.html" %}
+{% block title %} | Revisión de edición{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Edición pendiente</h1>
+  <p class="muted">Revisa la propuesta antes de aprobar o rechazar.</p>
+
+  <div class="report-card">
+    <div class="report-main">
+      <h2>{{ edit.title }}</h2>
+      <div class="muted">Reporte #{{ edit.post_id }}</div>
+      <div class="muted">{{ edit.editor_label or 'Anon' }} · {{ edit.created_at }}</div>
+      <div class="muted"><strong>Motivo:</strong> {{ edit.reason }}</div>
+      {% if edit_category %}
+        <div class="muted">Categoría propuesta: {{ edit_category.name }}</div>
+      {% endif %}
+      {% if edit.repressor_name %}
+        <div class="muted">Represor: {{ edit.repressor_name }}</div>
+      {% endif %}
+      {% if edit.other_type %}
+        <div class="muted">Tipo: {{ edit.other_type }}</div>
+      {% endif %}
+      {% if edit.address %}
+        <div class="muted">Dirección: {{ edit.address }}</div>
+      {% endif %}
+      {% if edit.province or edit.municipality %}
+        <div class="muted">Provincia: {{ edit.province or 'N/D' }} · Municipio: {{ edit.municipality or 'N/D' }}</div>
+      {% endif %}
+      <div class="muted">{{ edit.latitude }}, {{ edit.longitude }}</div>
+      <p>{{ edit.description }}</p>
+
+      {% if links and links|length %}
+        <div class="muted">Enlaces de interés</div>
+        <ul>
+          {% for link in links %}
+            <li><a href="{{ link }}" target="_blank" rel="noopener">{{ link }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+
+    <div class="report-actions">
+      <form method="post" action="{{ url_for('moderation.approve_edit', edit_id=edit.id) }}">
+        <button class="btn-primary" type="submit">Aprobar edición</button>
+      </form>
+      <form method="post" action="{{ url_for('moderation.reject_edit', edit_id=edit.id) }}">
+        <button class="btn-secondary" type="submit">Rechazar edición</button>
+      </form>
+      <a class="btn-secondary" href="{{ url_for('map.report_detail', post_id=post.id) }}">Ver reporte original</a>
+    </div>
+  </div>
+
+  {% if media_items %}
+    <div class="media-section">
+      <div class="media-header">
+        <div class="media-title">Imágenes propuestas</div>
+      </div>
+      <div class="media-grid">
+        {% for item in media_items %}
+          <div class="media-thumb">
+            <img src="{{ item.url }}" alt="Imagen propuesta" />
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

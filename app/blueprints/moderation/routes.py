@@ -1,8 +1,10 @@
+import json
 from flask import render_template, redirect, url_for, flash
 from flask_login import login_required
 
 from app.extensions import db
 from app.models.post import Post
+from app.models.category import Category
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.media import Media
@@ -110,3 +112,31 @@ def reject_edit(edit_id):
     db.session.commit()
     flash("Edición rechazada.", "success")
     return redirect(url_for("moderation.dashboard"))
+
+
+@moderation_bp.route("/ediciones/<int:edit_id>")
+@login_required
+@role_required("moderador", "administrador")
+def edit_detail(edit_id):
+    edit = PostEditRequest.query.get_or_404(edit_id)
+    post = Post.query.get_or_404(edit.post_id)
+    edit_category = None
+    if edit.category_id:
+        edit_category = Category.query.get(edit.category_id)
+    links = []
+    if edit.links_json:
+        try:
+            links = json.loads(edit.links_json)
+        except Exception:
+            links = []
+    media_items = []
+    if edit.media_json:
+        media_items = parse_media_json(edit.media_json)
+    return render_template(
+        "moderation/edit_detail.html",
+        edit=edit,
+        post=post,
+        edit_category=edit_category,
+        links=links,
+        media_items=media_items,
+    )
