@@ -55,6 +55,53 @@ function setupProvinceMunicipality() {
   });
 }
 
+function setupCategoryRequirements() {
+  const select = document.getElementById("categorySelect");
+  const residenciaFields = document.getElementById("residenciaFields");
+  const otrosFields = document.getElementById("otrosFields");
+  const repressorInput = document.getElementById("repressorNameInput");
+  const otherInput = document.getElementById("otherTypeInput");
+  const imageInput = document.querySelector('input[name="images"]');
+  const status = document.getElementById("editImageStatus");
+  const form = document.querySelector(".form-grid");
+
+  const update = () => {
+    const selected = select?.options[select.selectedIndex];
+    const slug = selected?.dataset?.slug || "";
+    const isResidencia = slug === "residencia-represor";
+    const isOtros = slug === "otros";
+    if (residenciaFields) residenciaFields.classList.toggle("is-hidden", !isResidencia);
+    if (otrosFields) otrosFields.classList.toggle("is-hidden", !isOtros);
+    if (repressorInput) repressorInput.required = isResidencia;
+    if (otherInput) otherInput.required = isOtros;
+  };
+
+  if (select) {
+    select.addEventListener("change", update);
+  }
+
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      const selected = select?.options[select.selectedIndex];
+      const slug = selected?.dataset?.slug || "";
+      if (slug === "residencia-represor") {
+        const existingCount = form ? parseInt(form.dataset.existingMedia || "0", 10) : 0;
+        const newCount = imageInput && imageInput.files ? imageInput.files.length : 0;
+        if (existingCount + newCount < 1) {
+          e.preventDefault();
+          if (status) {
+            status.textContent = "Debes subir al menos una imagen del represor.";
+          } else {
+            alert("Debes subir al menos una imagen del represor.");
+          }
+        }
+      }
+    });
+  }
+
+  update();
+}
+
 window.initDrawMap = function () {
   const mapEl = document.getElementById("drawMap");
   if (!mapEl) return;
@@ -287,6 +334,7 @@ function setupImageValidation() {
 
 document.addEventListener("DOMContentLoaded", () => {
   setupLinks();
+  setupCategoryRequirements();
   setupProvinceMunicipality();
   setupImageValidation();
   const form = document.querySelector(".form-grid");

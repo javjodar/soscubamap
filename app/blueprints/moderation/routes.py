@@ -61,6 +61,8 @@ def approve_edit(edit_id):
         address=post.address,
         province=post.province,
         municipality=post.municipality,
+        repressor_name=post.repressor_name,
+        other_type=post.other_type,
         category_id=post.category_id,
         polygon_geojson=post.polygon_geojson,
         links_json=post.links_json,
@@ -75,6 +77,8 @@ def approve_edit(edit_id):
     post.address = edit.address
     post.province = edit.province
     post.municipality = edit.municipality
+    post.repressor_name = edit.repressor_name
+    post.other_type = edit.other_type
     if edit.category_id:
         post.category_id = edit.category_id
     post.polygon_geojson = edit.polygon_geojson

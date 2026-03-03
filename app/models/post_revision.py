@@ -18,6 +18,8 @@ class PostRevision(db.Model):
     address = db.Column(db.String(255))
     province = db.Column(db.String(120))
     municipality = db.Column(db.String(120))
+    repressor_name = db.Column(db.String(160))
+    other_type = db.Column(db.String(160))
     category_id = db.Column(db.Integer)
     polygon_geojson = db.Column(db.Text)
     links_json = db.Column(db.Text)

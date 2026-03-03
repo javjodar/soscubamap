@@ -7,6 +7,12 @@
     <div class="report-main">
       <h1>{{ post.title }}</h1>
       <div class="muted">{{ post.category.name }}</div>
+      {% if post.category.slug == 'residencia-represor' and post.repressor_name %}
+        <div class="muted">Represor: {{ post.repressor_name }}</div>
+      {% endif %}
+      {% if post.category.slug == 'otros' and post.other_type %}
+        <div class="muted">Tipo: {{ post.other_type }}</div>
+      {% endif %}
       <div class="muted">{{ anon_label }}</div>
       <div class="muted">{{ post.created_at }}</div>
       {% if post.address %}<div class="muted">Dirección: {{ post.address }}</div>{% endif %}

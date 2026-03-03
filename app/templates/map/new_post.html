@@ -35,6 +35,25 @@
         {% endfor %}
       </select>
     </label>
+    <div id="residenciaFields" class="category-fields is-hidden">
+      <div class="category-alert">
+        Para “Residencia de represor” debes indicar el nombre o apodo del represor y subir al menos una imagen.
+        Esto es obligatorio para evitar abuso de la app.
+      </div>
+      <label>
+        Nombre o apodo del represor
+        <input type="text" name="repressor_name" id="repressorNameInput" placeholder="Ej: Apodo o nombre" />
+      </label>
+    </div>
+    <div id="otrosFields" class="category-fields is-hidden">
+      <div class="category-alert">
+        Para “Otros” debes especificar el tipo del reporte.
+      </div>
+      <label>
+        Tipo (Otros)
+        <input type="text" name="other_type" id="otherTypeInput" placeholder="Ej: Centro de vigilancia, evento, etc." />
+      </label>
+    </div>
     <label>
       Descripción
       <textarea name="description" id="descriptionInput" rows="6" required minlength="50" placeholder="Incluye detalles que ayuden a identificar el lugar, fechas, contexto y referencias visibles."></textarea>

@@ -1401,6 +1401,21 @@ button[data-loading="true"]::after {
   font-size: 14px;
 }
 
+.category-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.category-alert {
+  border: 1px solid var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ffdada;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .recaptcha-wrap {
   display: flex;
   justify-content: flex-start;

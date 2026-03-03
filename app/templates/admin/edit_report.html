@@ -20,19 +20,38 @@
     <div class="draw-help">Usa polígono, rectángulo o círculo. Puedes editar el área antes de guardar.</div>
   </div>
 
-  <form class="form-grid" method="post">
+  <form class="form-grid" method="post" data-existing-media="{{ media_items|length }}">
     <label>
       Título
       <input type="text" name="title" value="{{ post.title }}" required />
     </label>
     <label>
       Categoría
-      <select name="category_id" required>
+      <select name="category_id" id="categorySelect" required>
         {% for cat in categories %}
-          <option value="{{ cat.id }}" {% if cat.id == post.category_id %}selected{% endif %}>{{ cat.name }}</option>
+          <option value="{{ cat.id }}" data-slug="{{ cat.slug }}" {% if cat.id == post.category_id %}selected{% endif %}>{{ cat.name }}</option>
         {% endfor %}
       </select>
     </label>
+    <div id="residenciaFields" class="category-fields is-hidden">
+      <div class="category-alert">
+        Para “Residencia de represor” debes indicar el nombre o apodo del represor y subir al menos una imagen.
+        Esto es obligatorio para evitar abuso de la app.
+      </div>
+      <label>
+        Nombre o apodo del represor
+        <input type="text" name="repressor_name" id="repressorNameInput" value="{{ post.repressor_name or '' }}" />
+      </label>
+    </div>
+    <div id="otrosFields" class="category-fields is-hidden">
+      <div class="category-alert">
+        Para “Otros” debes especificar el tipo del reporte.
+      </div>
+      <label>
+        Tipo (Otros)
+        <input type="text" name="other_type" id="otherTypeInput" value="{{ post.other_type or '' }}" />
+      </label>
+    </div>
     <label>
       Descripción
       <textarea name="description" rows="6" required minlength="50">{{ post.description }}</textarea>

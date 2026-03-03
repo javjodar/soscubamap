@@ -13,7 +13,7 @@ from app.models.post_edit_request import PostEditRequest
 from app.models.category import Category
 from app.extensions import db
 from app.models.media import Media
-from app.services.media_upload import media_json_from_post, parse_media_json
+from app.services.media_upload import media_json_from_post, parse_media_json, get_media_payload
 from app.services.input_safety import has_malicious_input
 from app.services.geo_lookup import lookup_location, list_provinces, municipalities_map
 from flask_login import current_user
@@ -21,7 +21,6 @@ import json
 from decimal import Decimal
 from sqlalchemy import func
 from app.services.markdown_utils import render_markdown
-from app.services.media_upload import parse_media_json
 from app.services.discussion_tags import upsert_tags
 from . import admin_bp
 
@@ -229,11 +228,13 @@ def edit_report(post_id):
         address = request.form.get("address", "").strip()
         province = request.form.get("province", "").strip()
         municipality = request.form.get("municipality", "").strip()
+        repressor_name = request.form.get("repressor_name", "").strip()
+        other_type = request.form.get("other_type", "").strip()
         polygon_geojson = request.form.get("polygon_geojson", "").strip()
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
 
-        if has_malicious_input([title, description, edit_reason, address, province, municipality] + links_list):
+        if has_malicious_input([title, description, edit_reason, address, province, municipality, repressor_name, other_type] + links_list):
             flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))
 
@@ -259,6 +260,21 @@ def edit_report(post_id):
             flash("Provincia y municipio son obligatorios.", "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))
 
+        category = Category.query.get(int(category_id)) if category_id else None
+        slug = category.slug if category else ""
+        existing_media_count = len(get_media_payload(post))
+        if slug == "residencia-represor":
+            if not repressor_name:
+                flash("Debes indicar el nombre o apodo del represor.", "error")
+                return redirect(url_for("admin.edit_report", post_id=post.id))
+            if existing_media_count < 1:
+                flash("Debes subir al menos una imagen del represor.", "error")
+                return redirect(url_for("admin.edit_report", post_id=post.id))
+        if slug == "otros":
+            if not other_type:
+                flash("Debes especificar el tipo en la categoría Otros.", "error")
+                return redirect(url_for("admin.edit_report", post_id=post.id))
+
         moderation_enabled = get_setting("moderation_enabled", "true") == "true"
 
         editor_label = "Admin"
@@ -281,6 +297,8 @@ def edit_report(post_id):
                 address=address or None,
                 province=province or None,
                 municipality=municipality or None,
+                repressor_name=repressor_name or None,
+                other_type=other_type or None,
                 category_id=int(category_id),
                 polygon_geojson=polygon_geojson or None,
                 links_json=json.dumps(links_list) if links_list else None,
@@ -303,6 +321,8 @@ def edit_report(post_id):
             address=post.address,
             province=post.province,
             municipality=post.municipality,
+            repressor_name=post.repressor_name,
+            other_type=post.other_type,
             category_id=post.category_id,
             polygon_geojson=post.polygon_geojson,
             links_json=post.links_json,
@@ -318,6 +338,8 @@ def edit_report(post_id):
         post.address = address or None
         post.province = province or None
         post.municipality = municipality or None
+        post.repressor_name = repressor_name or None
+        post.other_type = other_type or None
         post.polygon_geojson = polygon_geojson or None
         post.links_json = json.dumps(links_list) if links_list else None
         db.session.commit()
@@ -330,6 +352,7 @@ def edit_report(post_id):
         post=post,
         categories=categories,
         links=links,
+        media_items=get_media_payload(post),
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
     )
