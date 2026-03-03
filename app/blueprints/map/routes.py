@@ -22,6 +22,7 @@ from app.services.media_upload import (
     upload_files,
 )
 from app.services.recaptcha import verify_recaptcha, recaptcha_enabled
+from app.services.input_safety import has_malicious_input
 from app.extensions import db, limiter
 from . import map_bp
 
@@ -116,6 +117,10 @@ def new_post():
         image_captions = request.form.getlist("image_captions[]")
         links = request.form.getlist("links[]")
         links = [link.strip() for link in links if link.strip()]
+
+        if has_malicious_input([title, description, address, province, municipality] + links):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+            return redirect(url_for("map.new_post"))
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
@@ -247,7 +252,9 @@ def report_location(post_id):
     submitted = False
     if request.method == "POST":
         message = request.form.get("message", "").strip()
-        if not message:
+        if has_malicious_input([message]):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+        elif not message:
             flash("Describe por qué la ubicación es incorrecta.", "error")
         else:
             db.session.add(LocationReport(post_id=post.id, message=message))
@@ -323,6 +330,10 @@ def edit_report_public(post_id):
         image_captions = request.form.getlist("image_captions[]")
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
+
+        if has_malicious_input([title, description, edit_reason, address, province, municipality] + links_list):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")

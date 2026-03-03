@@ -12,6 +12,7 @@ from app.services.markdown_utils import render_markdown
 from app.services.discussion_tags import upsert_tags, normalize_tag
 from app.services.media_upload import validate_files, upload_files, parse_media_json
 from app.services.recaptcha import verify_recaptcha, recaptcha_enabled
+from app.services.input_safety import has_malicious_input
 from . import discussions_bp
 
 
@@ -117,6 +118,10 @@ def new_discussion():
         ]
         image_captions = request.form.getlist("image_captions[]")
 
+        if has_malicious_input([title, body, nickname] + links_list + selected_tags + new_tags):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+            return redirect(url_for("discussions.new_discussion"))
+
         if not title or not body:
             flash("Título y contenido son obligatorios.", "error")
             return redirect(url_for("discussions.new_discussion"))
@@ -174,6 +179,9 @@ def detail(post_id):
         body = request.form.get("comment_body", "").strip()
         nickname = request.form.get("comment_nickname", "").strip()
         parent_id = request.form.get("parent_id", "").strip()
+        if has_malicious_input([body, nickname]):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+            return redirect(url_for("discussions.detail", post_id=post.id))
         if not body:
             flash("El comentario no puede estar vacío.", "error")
             return redirect(url_for("discussions.detail", post_id=post.id))

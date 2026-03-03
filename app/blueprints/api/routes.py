@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flask_login import current_user
 
 from app.extensions import db, limiter
+from app.services.input_safety import has_malicious_input
 from app.models.comment import Comment
 from app.models.user import User
 from app.models.role import Role
@@ -150,6 +151,8 @@ def comments(post_id):
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
         body = (data.get("body") or "").strip()
+        if has_malicious_input([body]):
+            return jsonify({"ok": False, "error": "Contenido sospechoso."}), 400
         if not body:
             return jsonify({"ok": False, "error": "Comentario vacío."}), 400
 
@@ -376,6 +379,8 @@ def upload_post_media(post_id):
         if file and (file.filename or "").strip()
     ]
     captions_raw = request.form.getlist("image_captions[]")
+    if has_malicious_input(captions_raw):
+        return jsonify({"ok": False, "error": "Contenido sospechoso."}), 400
     ok, error = validate_files(files)
     if not ok:
         return jsonify({"ok": False, "error": error}), 400
@@ -478,6 +483,9 @@ def chat_messages():
         data = request.get_json(silent=True) or {}
         body = (data.get("body") or "").strip()
         nickname = (data.get("nickname") or "").strip()
+
+        if has_malicious_input([body, nickname]):
+            return jsonify({"ok": False, "error": "Contenido sospechoso."}), 400
 
         if not body:
             return jsonify({"ok": False, "error": "Mensaje vacío."}), 400

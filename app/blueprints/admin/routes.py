@@ -14,6 +14,7 @@ from app.models.category import Category
 from app.extensions import db
 from app.models.media import Media
 from app.services.media_upload import media_json_from_post, parse_media_json
+from app.services.input_safety import has_malicious_input
 from app.services.geo_lookup import lookup_location, list_provinces, municipalities_map
 from flask_login import current_user
 import json
@@ -231,6 +232,10 @@ def edit_report(post_id):
         polygon_geojson = request.form.get("polygon_geojson", "").strip()
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
+
+        if has_malicious_input([title, description, edit_reason, address, province, municipality] + links_list):
+            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
+            return redirect(url_for("admin.edit_report", post_id=post.id))
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
