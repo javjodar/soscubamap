@@ -1436,6 +1436,16 @@ textarea {
   font-size: 14px;
 }
 
+.field-error {
+  border: 3px solid var(--danger);
+}
+
+.field-error-msg {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -291,7 +291,8 @@ function setupProvinceMunicipality() {
         .join("");
   };
 
-  renderMunicipalities(provSelect.value, munSelect.value);
+  const initialSelected = munSelect.dataset.selected || munSelect.value;
+  renderMunicipalities(provSelect.value, initialSelected);
   provSelect.addEventListener("change", () => {
     renderMunicipalities(provSelect.value, "");
   });

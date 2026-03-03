@@ -2,8 +2,13 @@
 {% block title %} | Editar reporte{% endblock %}
 {% block content %}
 <section class="panel">
+  {% set use_form = form_data is not none %}
+  {% set fd = form_data or {} %}
   <h1>Editar reporte</h1>
   <p class="muted">Los cambios se registran en el historial público.</p>
+  {% if errors.get("form") %}
+    <div class="flash error">{{ errors.get("form") }}</div>
+  {% endif %}
 
   <div class="draw-wrap">
     <div class="draw-title">Dibuja o ajusta el área del reporte</div>
@@ -12,9 +17,9 @@
       class="draw-map"
       data-api-key="{{ config.GOOGLE_MAPS_API_KEY }}"
       data-map-id="{{ config.GOOGLE_MAPS_MAP_ID }}"
-      data-lat="{{ post.latitude }}"
-      data-lng="{{ post.longitude }}"
-      data-geojson="{{ post.polygon_geojson|default('')|e }}"
+      data-lat="{{ fd.latitude if use_form else post.latitude }}"
+      data-lng="{{ fd.longitude if use_form else post.longitude }}"
+      data-geojson="{{ (fd.polygon_geojson if use_form else post.polygon_geojson)|default('')|e }}"
       data-allow-zoom="1"
     ></div>
     <div class="draw-help">Usa polígono, rectángulo o círculo. Puedes editar el área antes de guardar.</div>
@@ -23,15 +28,28 @@
   <form class="form-grid" method="post" data-existing-media="{{ media_items|length }}">
     <label>
       Título
-      <input type="text" name="title" value="{{ post.title }}" required />
+      <input type="text" name="title" value="{{ fd.title if use_form else post.title }}" required class="{{ 'field-error' if errors.get('title') else '' }}" />
+      {% if errors.get("title") %}
+        <div class="field-error-msg">{{ errors.get("title") }}</div>
+      {% endif %}
     </label>
     <label>
       Categoría
-      <select name="category_id" id="categorySelect" required>
+      <select name="category_id" id="categorySelect" required class="{{ 'field-error' if errors.get('category_id') else '' }}">
         {% for cat in categories %}
-          <option value="{{ cat.id }}" data-slug="{{ cat.slug }}" {% if cat.id == post.category_id %}selected{% endif %}>{{ cat.name }}</option>
+          {% if use_form %}
+            <option value="{{ cat.id }}" data-slug="{{ cat.slug }}" {% if fd.category_id == (cat.id|string) %}selected{% endif %}>{{ cat.name }}</option>
+          {% else %}
+            <option value="{{ cat.id }}" data-slug="{{ cat.slug }}" {% if cat.id == post.category_id %}selected{% endif %}>{{ cat.name }}</option>
+          {% endif %}
         {% endfor %}
       </select>
+      {% if errors.get("category_id") %}
+        <div class="field-error-msg">{{ errors.get("category_id") }}</div>
+      {% endif %}
+      {% if errors.get("images") %}
+        <div class="field-error-msg">{{ errors.get("images") }}</div>
+      {% endif %}
     </label>
     <div id="residenciaFields" class="category-fields is-hidden">
       <div class="category-alert">
@@ -40,7 +58,10 @@
       </div>
       <label>
         Nombre o apodo del represor
-        <input type="text" name="repressor_name" id="repressorNameInput" value="{{ post.repressor_name or '' }}" />
+        <input type="text" name="repressor_name" id="repressorNameInput" value="{{ fd.repressor_name if use_form else (post.repressor_name or '') }}" class="{{ 'field-error' if errors.get('repressor_name') else '' }}" />
+        {% if errors.get("repressor_name") %}
+          <div class="field-error-msg">{{ errors.get("repressor_name") }}</div>
+        {% endif %}
       </label>
     </div>
     <div id="otrosFields" class="category-fields is-hidden">
@@ -49,46 +70,74 @@
       </div>
       <label>
         Tipo (Otros)
-        <input type="text" name="other_type" id="otherTypeInput" value="{{ post.other_type or '' }}" />
+        <input type="text" name="other_type" id="otherTypeInput" value="{{ fd.other_type if use_form else (post.other_type or '') }}" class="{{ 'field-error' if errors.get('other_type') else '' }}" />
+        {% if errors.get("other_type") %}
+          <div class="field-error-msg">{{ errors.get("other_type") }}</div>
+        {% endif %}
       </label>
     </div>
     <label>
       Descripción
-      <textarea name="description" rows="6" required minlength="50">{{ post.description }}</textarea>
+      <textarea name="description" rows="6" required minlength="50" class="{{ 'field-error' if errors.get('description') else '' }}">{{ fd.description if use_form else post.description }}</textarea>
+      {% if errors.get("description") %}
+        <div class="field-error-msg">{{ errors.get("description") }}</div>
+      {% endif %}
     </label>
     <label>
       Motivo de edición
-      <textarea name="edit_reason" rows="3" required placeholder="Explica por qué realizas este cambio."></textarea>
+      <textarea name="edit_reason" rows="3" required placeholder="Explica por qué realizas este cambio." class="{{ 'field-error' if errors.get('edit_reason') else '' }}">{{ fd.edit_reason if use_form else '' }}</textarea>
+      {% if errors.get("edit_reason") %}
+        <div class="field-error-msg">{{ errors.get("edit_reason") }}</div>
+      {% endif %}
     </label>
     <div class="two-col">
       <label>
         Latitud
-        <input type="text" name="latitude" value="{{ post.latitude }}" required />
+        <input type="text" name="latitude" value="{{ fd.latitude if use_form else post.latitude }}" required class="{{ 'field-error' if errors.get('latitude') else '' }}" />
+        {% if errors.get("latitude") %}
+          <div class="field-error-msg">{{ errors.get("latitude") }}</div>
+        {% endif %}
       </label>
       <label>
         Longitud
-        <input type="text" name="longitude" value="{{ post.longitude }}" required />
+        <input type="text" name="longitude" value="{{ fd.longitude if use_form else post.longitude }}" required class="{{ 'field-error' if errors.get('longitude') else '' }}" />
+        {% if errors.get("longitude") %}
+          <div class="field-error-msg">{{ errors.get("longitude") }}</div>
+        {% endif %}
       </label>
     </div>
     <label>
       Dirección
-      <input type="text" name="address" value="{{ post.address or '' }}" />
+      <input type="text" name="address" value="{{ fd.address if use_form else (post.address or '') }}" class="{{ 'field-error' if errors.get('address') else '' }}" />
+      {% if errors.get("address") %}
+        <div class="field-error-msg">{{ errors.get("address") }}</div>
+      {% endif %}
     </label>
     <div class="two-col">
       <label>
         Provincia
-        <select name="province" id="provinceSelect" required>
-          <option value="" disabled {% if not post.province %}selected{% endif %}>Elige provincia</option>
+        <select name="province" id="provinceSelect" required class="{{ 'field-error' if errors.get('province') else '' }}">
+          <option value="" disabled {% if (use_form and not fd.province) or (not use_form and not post.province) %}selected{% endif %}>Elige provincia</option>
           {% for prov in provinces %}
-            <option value="{{ prov }}" {% if post.province == prov %}selected{% endif %}>{{ prov }}</option>
+            {% if use_form %}
+              <option value="{{ prov }}" {% if fd.province == prov %}selected{% endif %}>{{ prov }}</option>
+            {% else %}
+              <option value="{{ prov }}" {% if post.province == prov %}selected{% endif %}>{{ prov }}</option>
+            {% endif %}
           {% endfor %}
         </select>
+        {% if errors.get("province") %}
+          <div class="field-error-msg">{{ errors.get("province") }}</div>
+        {% endif %}
       </label>
       <label>
         Municipio
-        <select name="municipality" id="municipalitySelect" data-selected="{{ post.municipality or '' }}" required>
+        <select name="municipality" id="municipalitySelect" data-selected="{{ fd.municipality if use_form else (post.municipality or '') }}" required class="{{ 'field-error' if errors.get('municipality') else '' }}">
           <option value="" disabled selected>Elige municipio</option>
         </select>
+        {% if errors.get("municipality") %}
+          <div class="field-error-msg">{{ errors.get("municipality") }}</div>
+        {% endif %}
       </label>
     </div>
     <div class="links-group">
@@ -97,15 +146,24 @@
         <button type="button" class="btn-secondary" id="addLinkBtn">+ Agregar</button>
       </div>
       <div id="linksList" class="links-list">
-        {% for link in links %}
-          <input type="url" name="links[]" value="{{ link }}" />
-        {% endfor %}
-        {% if links|length == 0 %}
-          <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
+        {% if use_form %}
+          {% for link in form_links %}
+            <input type="url" name="links[]" value="{{ link }}" />
+          {% endfor %}
+          {% if form_links|length == 0 %}
+            <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
+          {% endif %}
+        {% else %}
+          {% for link in links %}
+            <input type="url" name="links[]" value="{{ link }}" />
+          {% endfor %}
+          {% if links|length == 0 %}
+            <input type="url" name="links[]" placeholder="https://ejemplo.com/fuente" />
+          {% endif %}
         {% endif %}
       </div>
     </div>
-    <input type="hidden" name="polygon_geojson" id="polygonGeojson" value="{{ post.polygon_geojson or '' }}" />
+    <input type="hidden" name="polygon_geojson" id="polygonGeojson" value="{{ fd.polygon_geojson if use_form else (post.polygon_geojson or '') }}" />
     <button type="submit" class="btn-primary">Guardar cambios</button>
   </form>
 

@@ -97,22 +97,19 @@ def dashboard():
 def new_post():
     categories = Category.query.order_by(Category.id.asc()).all()
     if request.method == "POST":
-        if recaptcha_enabled():
-            token = request.form.get("g-recaptcha-response", "")
-            if not verify_recaptcha(token, request.remote_addr):
-                flash("Verificación reCAPTCHA falló. Intenta nuevamente.", "error")
-                return redirect(url_for("map.new_post"))
-        title = request.form.get("title", "").strip()
-        description = request.form.get("description", "").strip()
-        category_id = request.form.get("category_id")
-        latitude = request.form.get("latitude", "").strip()
-        longitude = request.form.get("longitude", "").strip()
-        address = request.form.get("address", "").strip()
-        province = request.form.get("province", "").strip()
-        municipality = request.form.get("municipality", "").strip()
-        repressor_name = request.form.get("repressor_name", "").strip()
-        other_type = request.form.get("other_type", "").strip()
-        polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        form_data = {
+            "title": request.form.get("title", "").strip(),
+            "description": request.form.get("description", "").strip(),
+            "category_id": request.form.get("category_id", "").strip(),
+            "latitude": request.form.get("latitude", "").strip(),
+            "longitude": request.form.get("longitude", "").strip(),
+            "address": request.form.get("address", "").strip(),
+            "province": request.form.get("province", "").strip(),
+            "municipality": request.form.get("municipality", "").strip(),
+            "repressor_name": request.form.get("repressor_name", "").strip(),
+            "other_type": request.form.get("other_type", "").strip(),
+            "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
+        }
         images = [
             file
             for file in request.files.getlist("images")
@@ -121,56 +118,124 @@ def new_post():
         image_captions = request.form.getlist("image_captions[]")
         links = request.form.getlist("links[]")
         links = [link.strip() for link in links if link.strip()]
+        errors = {}
 
-        if has_malicious_input([title, description, address, province, municipality, repressor_name, other_type] + links):
-            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
-            return redirect(url_for("map.new_post"))
+        if recaptcha_enabled():
+            token = request.form.get("g-recaptcha-response", "")
+            if not verify_recaptcha(token, request.remote_addr):
+                errors["recaptcha"] = "Verificación reCAPTCHA falló. Intenta nuevamente."
 
-        if not title or not description or not category_id or not latitude or not longitude:
-            flash("Completa todos los campos obligatorios.", "error")
-            return redirect(url_for("map.new_post"))
-        ok_title, msg_title = validate_title(title)
-        if not ok_title:
-            flash(msg_title, "error")
-            return redirect(url_for("map.new_post"))
-        if len(description) < 50:
-            flash("La descripción debe tener al menos 50 caracteres.", "error")
-            return redirect(url_for("map.new_post"))
-        ok_desc, msg_desc = validate_description(description)
-        if not ok_desc:
-            flash(msg_desc, "error")
-            return redirect(url_for("map.new_post"))
+        if has_malicious_input(
+            [
+                form_data["title"],
+                form_data["description"],
+                form_data["address"],
+                form_data["province"],
+                form_data["municipality"],
+                form_data["repressor_name"],
+                form_data["other_type"],
+            ]
+            + links
+        ):
+            errors["form"] = "Se detectó contenido sospechoso. Revisa y vuelve a intentar."
 
-        category = Category.query.get(int(category_id)) if category_id else None
+        if not form_data["title"]:
+            errors["title"] = "El título es obligatorio."
+        if not form_data["description"]:
+            errors["description"] = "La descripción es obligatoria."
+        if not form_data["category_id"]:
+            errors["category_id"] = "Selecciona una categoría."
+        if not form_data["latitude"]:
+            errors["latitude"] = "La latitud es obligatoria."
+        if not form_data["longitude"]:
+            errors["longitude"] = "La longitud es obligatoria."
+
+        if form_data["title"] and "title" not in errors:
+            ok_title, msg_title = validate_title(form_data["title"])
+            if not ok_title:
+                errors["title"] = msg_title
+        if form_data["description"] and "description" not in errors:
+            if len(form_data["description"]) < 50:
+                errors["description"] = "La descripción debe tener al menos 50 caracteres."
+            else:
+                ok_desc, msg_desc = validate_description(form_data["description"])
+                if not ok_desc:
+                    errors["description"] = msg_desc
+
+        category = None
+        if form_data["category_id"]:
+            try:
+                category = Category.query.get(int(form_data["category_id"]))
+            except Exception:
+                errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
         if slug == "residencia-represor":
-            if not repressor_name:
-                flash("Debes indicar el nombre o apodo del represor.", "error")
-                return redirect(url_for("map.new_post"))
+            if not form_data["repressor_name"]:
+                errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if not images:
-                flash("Debes subir al menos una imagen del represor.", "error")
-                return redirect(url_for("map.new_post"))
+                errors["images"] = "Debes subir al menos una imagen del represor."
         if slug == "otros":
-            if not other_type:
-                flash("Debes especificar el tipo en la categoría Otros.", "error")
-                return redirect(url_for("map.new_post"))
-            if not is_other_type_allowed(other_type):
-                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
-                return redirect(url_for("map.new_post"))
-        if images:
+            if not form_data["other_type"]:
+                errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
+            elif not is_other_type_allowed(form_data["other_type"]):
+                errors["other_type"] = (
+                    "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente."
+                )
+        if images and "images" not in errors:
             ok, error = validate_files(images)
             if not ok:
-                flash(error, "error")
-                return redirect(url_for("map.new_post"))
+                errors["images"] = error
+
+        lat = None
+        lng = None
+        if "latitude" not in errors and "longitude" not in errors:
+            try:
+                lat = Decimal(form_data["latitude"])
+                lng = Decimal(form_data["longitude"])
+            except Exception:
+                errors["latitude"] = "Latitud inválida."
+                errors["longitude"] = "Longitud inválida."
+
+        if lat is not None and lng is not None:
+            province, municipality = _resolve_geo_location(
+                lat, lng, form_data["province"], form_data["municipality"]
+            )
+            form_data["province"] = province or ""
+            form_data["municipality"] = municipality or ""
+
+        if not form_data["province"]:
+            errors["province"] = "Provincia obligatoria."
+        if not form_data["municipality"]:
+            errors["municipality"] = "Municipio obligatorio."
+
+        if errors:
+            moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+            moderation_enabled = True
+            if moderation_setting:
+                moderation_enabled = moderation_setting.value == "true"
+            return render_template(
+                "map/new_post.html",
+                categories=categories,
+                preset_lat=form_data["latitude"],
+                preset_lng=form_data["longitude"],
+                preset_zoom=request.args.get("zoom", ""),
+                moderation_enabled=moderation_enabled,
+                provinces=list_provinces(),
+                municipalities_map=municipalities_map(),
+                recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+                form_data=form_data,
+                errors=errors,
+                form_links=links,
+            )
 
         try:
-            lat = Decimal(latitude)
-            lng = Decimal(longitude)
+            lat = Decimal(form_data["latitude"])
+            lng = Decimal(form_data["longitude"])
         except Exception:
             flash("Latitud/longitud inválidas.", "error")
             return redirect(url_for("map.new_post"))
 
-        province, municipality = _resolve_geo_location(lat, lng, province, municipality)
+        province, municipality = _resolve_geo_location(lat, lng, form_data["province"], form_data["municipality"])
         if not province or not municipality:
             flash("Provincia y municipio son obligatorios.", "error")
             return redirect(url_for("map.new_post"))
@@ -196,17 +261,17 @@ def new_post():
             moderation_enabled = moderation_setting.value == "true"
 
         post = Post(
-            title=title,
-            description=description,
-            category_id=int(category_id),
+            title=form_data["title"],
+            description=form_data["description"],
+            category_id=int(form_data["category_id"]),
             latitude=lat,
             longitude=lng,
-            address=address or None,
+            address=form_data["address"] or None,
             province=province or None,
             municipality=municipality or None,
-            repressor_name=repressor_name or None,
-            other_type=other_type or None,
-            polygon_geojson=polygon_geojson or None,
+            repressor_name=form_data["repressor_name"] or None,
+            other_type=form_data["other_type"] or None,
+            polygon_geojson=form_data["polygon_geojson"] or None,
             links_json=json.dumps(links) if links else None,
             author_id=author_id,
         )
@@ -263,6 +328,9 @@ def new_post():
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
         recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+        form_data=None,
+        errors={},
+        form_links=[],
     )
 
 
@@ -338,23 +406,20 @@ def edit_report_public(post_id):
             links = []
 
     if request.method == "POST":
-        if recaptcha_enabled():
-            token = request.form.get("g-recaptcha-response", "")
-            if not verify_recaptcha(token, request.remote_addr):
-                flash("Verificación reCAPTCHA falló. Intenta nuevamente.", "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
-        title = request.form.get("title", "").strip()
-        description = request.form.get("description", "").strip()
-        edit_reason = request.form.get("edit_reason", "").strip()
-        category_id = request.form.get("category_id")
-        latitude = request.form.get("latitude", "").strip()
-        longitude = request.form.get("longitude", "").strip()
-        address = request.form.get("address", "").strip()
-        province = request.form.get("province", "").strip()
-        municipality = request.form.get("municipality", "").strip()
-        repressor_name = request.form.get("repressor_name", "").strip()
-        other_type = request.form.get("other_type", "").strip()
-        polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        form_data = {
+            "title": request.form.get("title", "").strip(),
+            "description": request.form.get("description", "").strip(),
+            "edit_reason": request.form.get("edit_reason", "").strip(),
+            "category_id": request.form.get("category_id", "").strip(),
+            "latitude": request.form.get("latitude", "").strip(),
+            "longitude": request.form.get("longitude", "").strip(),
+            "address": request.form.get("address", "").strip(),
+            "province": request.form.get("province", "").strip(),
+            "municipality": request.form.get("municipality", "").strip(),
+            "repressor_name": request.form.get("repressor_name", "").strip(),
+            "other_type": request.form.get("other_type", "").strip(),
+            "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
+        }
         images = [
             file
             for file in request.files.getlist("images")
@@ -363,60 +428,128 @@ def edit_report_public(post_id):
         image_captions = request.form.getlist("image_captions[]")
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
+        errors = {}
 
-        if has_malicious_input([title, description, edit_reason, address, province, municipality, repressor_name, other_type] + links_list):
-            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
+        if recaptcha_enabled():
+            token = request.form.get("g-recaptcha-response", "")
+            if not verify_recaptcha(token, request.remote_addr):
+                errors["recaptcha"] = "Verificación reCAPTCHA falló. Intenta nuevamente."
 
-        if not title or not description or not category_id or not latitude or not longitude:
-            flash("Completa todos los campos obligatorios.", "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
-        ok_title, msg_title = validate_title(title)
-        if not ok_title:
-            flash(msg_title, "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
-        if len(description) < 50:
-            flash("La descripción debe tener al menos 50 caracteres.", "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
-        ok_desc, msg_desc = validate_description(description)
-        if not ok_desc:
-            flash(msg_desc, "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
+        if has_malicious_input(
+            [
+                form_data["title"],
+                form_data["description"],
+                form_data["edit_reason"],
+                form_data["address"],
+                form_data["province"],
+                form_data["municipality"],
+                form_data["repressor_name"],
+                form_data["other_type"],
+            ]
+            + links_list
+        ):
+            errors["form"] = "Se detectó contenido sospechoso. Revisa y vuelve a intentar."
 
-        category = Category.query.get(int(category_id)) if category_id else None
+        if not form_data["title"]:
+            errors["title"] = "El título es obligatorio."
+        if not form_data["description"]:
+            errors["description"] = "La descripción es obligatoria."
+        if not form_data["edit_reason"]:
+            errors["edit_reason"] = "El motivo de edición es obligatorio."
+        if not form_data["category_id"]:
+            errors["category_id"] = "Selecciona una categoría."
+        if not form_data["latitude"]:
+            errors["latitude"] = "La latitud es obligatoria."
+        if not form_data["longitude"]:
+            errors["longitude"] = "La longitud es obligatoria."
+
+        if form_data["title"] and "title" not in errors:
+            ok_title, msg_title = validate_title(form_data["title"])
+            if not ok_title:
+                errors["title"] = msg_title
+        if form_data["description"] and "description" not in errors:
+            if len(form_data["description"]) < 50:
+                errors["description"] = "La descripción debe tener al menos 50 caracteres."
+            else:
+                ok_desc, msg_desc = validate_description(form_data["description"])
+                if not ok_desc:
+                    errors["description"] = msg_desc
+
+        category = None
+        if form_data["category_id"]:
+            try:
+                category = Category.query.get(int(form_data["category_id"]))
+            except Exception:
+                errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
         existing_media_count = len(get_media_payload(post))
         if slug == "residencia-represor":
-            if not repressor_name:
-                flash("Debes indicar el nombre o apodo del represor.", "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
+            if not form_data["repressor_name"]:
+                errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if existing_media_count + len(images) < 1:
-                flash("Debes subir al menos una imagen del represor.", "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
+                errors["images"] = "Debes subir al menos una imagen del represor."
         if slug == "otros":
-            if not other_type:
-                flash("Debes especificar el tipo en la categoría Otros.", "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
-            if not is_other_type_allowed(other_type):
-                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
-        if not edit_reason:
-            flash("El motivo de edición es obligatorio.", "error")
-            return redirect(url_for("map.edit_report_public", post_id=post.id))
-        if images:
+            if not form_data["other_type"]:
+                errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
+            elif not is_other_type_allowed(form_data["other_type"]):
+                errors["other_type"] = (
+                    "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente."
+                )
+        if images and "images" not in errors:
             ok, error = validate_files(images)
             if not ok:
-                flash(error, "error")
-                return redirect(url_for("map.edit_report_public", post_id=post.id))
+                errors["images"] = error
+
+        lat = None
+        lng = None
+        if "latitude" not in errors and "longitude" not in errors:
+            try:
+                lat = Decimal(form_data["latitude"])
+                lng = Decimal(form_data["longitude"])
+            except Exception:
+                errors["latitude"] = "Latitud inválida."
+                errors["longitude"] = "Longitud inválida."
+
+        if lat is not None and lng is not None:
+            province, municipality = _resolve_geo_location(
+                lat, lng, form_data["province"], form_data["municipality"]
+            )
+            form_data["province"] = province or ""
+            form_data["municipality"] = municipality or ""
+
+        if not form_data["province"]:
+            errors["province"] = "Provincia obligatoria."
+        if not form_data["municipality"]:
+            errors["municipality"] = "Municipio obligatorio."
+
+        if errors:
+            moderation_setting = SiteSetting.query.filter_by(key="moderation_enabled").first()
+            moderation_enabled = True
+            if moderation_setting:
+                moderation_enabled = moderation_setting.value == "true"
+            return render_template(
+                "map/edit_report.html",
+                post=post,
+                categories=categories,
+                links=links,
+                form_links=links_list,
+                form_data=form_data,
+                errors=errors,
+                media_items=get_media_payload(post),
+                moderation_enabled=moderation_enabled,
+                provinces=list_provinces(),
+                municipalities_map=municipalities_map(),
+                recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+            )
 
         try:
-            lat = Decimal(latitude)
-            lng = Decimal(longitude)
+            lat = Decimal(form_data["latitude"])
+            lng = Decimal(form_data["longitude"])
         except Exception:
             flash("Latitud/longitud inválidas.", "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
 
-        province, municipality = _resolve_geo_location(lat, lng, province, municipality)
+        province, municipality = _resolve_geo_location(lat, lng, form_data["province"], form_data["municipality"])
         if not province or not municipality:
             flash("Provincia y municipio son obligatorios.", "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
@@ -449,18 +582,18 @@ def edit_report_public(post_id):
                 post_id=post.id,
                 editor_id=editor.id if editor else None,
                 editor_label=editor_label,
-                reason=edit_reason,
-                title=title,
-                description=description,
+                reason=form_data["edit_reason"],
+                title=form_data["title"],
+                description=form_data["description"],
                 latitude=lat,
                 longitude=lng,
-                address=address or None,
+                address=form_data["address"] or None,
                 province=province or None,
                 municipality=municipality or None,
-                repressor_name=repressor_name or None,
-                other_type=other_type or None,
-                category_id=int(category_id),
-                polygon_geojson=polygon_geojson or None,
+                repressor_name=form_data["repressor_name"] or None,
+                other_type=form_data["other_type"] or None,
+                category_id=int(form_data["category_id"]),
+                polygon_geojson=form_data["polygon_geojson"] or None,
                 links_json=json.dumps(links_list) if links_list else None,
                 media_json=json.dumps(combined_media) if combined_media is not None else None,
             )
@@ -477,7 +610,7 @@ def edit_report_public(post_id):
             post_id=post.id,
             editor_id=editor.id if editor else None,
             editor_label=editor_label,
-            reason=edit_reason,
+            reason=form_data["edit_reason"],
             title=post.title,
             description=post.description,
             latitude=post.latitude,
@@ -494,17 +627,17 @@ def edit_report_public(post_id):
         )
         db.session.add(revision)
 
-        post.title = title
-        post.description = description
-        post.category_id = int(category_id)
+        post.title = form_data["title"]
+        post.description = form_data["description"]
+        post.category_id = int(form_data["category_id"])
         post.latitude = lat
         post.longitude = lng
-        post.address = address or None
+        post.address = form_data["address"] or None
         post.province = province or None
         post.municipality = municipality or None
-        post.repressor_name = repressor_name or None
-        post.other_type = other_type or None
-        post.polygon_geojson = polygon_geojson or None
+        post.repressor_name = form_data["repressor_name"] or None
+        post.other_type = form_data["other_type"] or None
+        post.polygon_geojson = form_data["polygon_geojson"] or None
         post.links_json = json.dumps(links_list) if links_list else None
         if media_items:
             for item in media_items:
@@ -538,6 +671,9 @@ def edit_report_public(post_id):
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
         recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+        form_data=None,
+        errors={},
+        form_links=links,
     )
 
 

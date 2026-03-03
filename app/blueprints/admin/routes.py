@@ -221,72 +221,120 @@ def edit_report(post_id):
             links = []
 
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        description = request.form.get("description", "").strip()
-        edit_reason = request.form.get("edit_reason", "").strip()
-        category_id = request.form.get("category_id")
-        latitude = request.form.get("latitude", "").strip()
-        longitude = request.form.get("longitude", "").strip()
-        address = request.form.get("address", "").strip()
-        province = request.form.get("province", "").strip()
-        municipality = request.form.get("municipality", "").strip()
-        repressor_name = request.form.get("repressor_name", "").strip()
-        other_type = request.form.get("other_type", "").strip()
-        polygon_geojson = request.form.get("polygon_geojson", "").strip()
+        form_data = {
+            "title": request.form.get("title", "").strip(),
+            "description": request.form.get("description", "").strip(),
+            "edit_reason": request.form.get("edit_reason", "").strip(),
+            "category_id": request.form.get("category_id", "").strip(),
+            "latitude": request.form.get("latitude", "").strip(),
+            "longitude": request.form.get("longitude", "").strip(),
+            "address": request.form.get("address", "").strip(),
+            "province": request.form.get("province", "").strip(),
+            "municipality": request.form.get("municipality", "").strip(),
+            "repressor_name": request.form.get("repressor_name", "").strip(),
+            "other_type": request.form.get("other_type", "").strip(),
+            "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
+        }
         links_list = request.form.getlist("links[]")
         links_list = [link.strip() for link in links_list if link.strip()]
+        errors = {}
 
-        if has_malicious_input([title, description, edit_reason, address, province, municipality, repressor_name, other_type] + links_list):
-            flash("Se detectó contenido sospechoso. Revisa y vuelve a intentar.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
+        if has_malicious_input(
+            [
+                form_data["title"],
+                form_data["description"],
+                form_data["edit_reason"],
+                form_data["address"],
+                form_data["province"],
+                form_data["municipality"],
+                form_data["repressor_name"],
+                form_data["other_type"],
+            ]
+            + links_list
+        ):
+            errors["form"] = "Se detectó contenido sospechoso. Revisa y vuelve a intentar."
 
-        if not title or not description or not category_id or not latitude or not longitude:
-            flash("Completa todos los campos obligatorios.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
-        ok_title, msg_title = validate_title(title)
-        if not ok_title:
-            flash(msg_title, "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
-        if len(description) < 50:
-            flash("La descripción debe tener al menos 50 caracteres.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
-        ok_desc, msg_desc = validate_description(description)
-        if not ok_desc:
-            flash(msg_desc, "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
-        if not edit_reason:
-            flash("El motivo de edición es obligatorio.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
+        if not form_data["title"]:
+            errors["title"] = "El título es obligatorio."
+        if not form_data["description"]:
+            errors["description"] = "La descripción es obligatoria."
+        if not form_data["edit_reason"]:
+            errors["edit_reason"] = "El motivo de edición es obligatorio."
+        if not form_data["category_id"]:
+            errors["category_id"] = "Selecciona una categoría."
+        if not form_data["latitude"]:
+            errors["latitude"] = "La latitud es obligatoria."
+        if not form_data["longitude"]:
+            errors["longitude"] = "La longitud es obligatoria."
 
-        try:
-            lat = Decimal(latitude)
-            lng = Decimal(longitude)
-        except Exception:
-            flash("Latitud/longitud inválidas.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
+        if form_data["title"] and "title" not in errors:
+            ok_title, msg_title = validate_title(form_data["title"])
+            if not ok_title:
+                errors["title"] = msg_title
+        if form_data["description"] and "description" not in errors:
+            if len(form_data["description"]) < 50:
+                errors["description"] = "La descripción debe tener al menos 50 caracteres."
+            else:
+                ok_desc, msg_desc = validate_description(form_data["description"])
+                if not ok_desc:
+                    errors["description"] = msg_desc
 
-        province, municipality = _resolve_geo_location(lat, lng, province, municipality)
-        if not province or not municipality:
-            flash("Provincia y municipio son obligatorios.", "error")
-            return redirect(url_for("admin.edit_report", post_id=post.id))
+        lat = None
+        lng = None
+        if "latitude" not in errors and "longitude" not in errors:
+            try:
+                lat = Decimal(form_data["latitude"])
+                lng = Decimal(form_data["longitude"])
+            except Exception:
+                errors["latitude"] = "Latitud inválida."
+                errors["longitude"] = "Longitud inválida."
 
-        category = Category.query.get(int(category_id)) if category_id else None
+        if lat is not None and lng is not None:
+            province, municipality = _resolve_geo_location(
+                lat, lng, form_data["province"], form_data["municipality"]
+            )
+            form_data["province"] = province or ""
+            form_data["municipality"] = municipality or ""
+
+        if not form_data["province"]:
+            errors["province"] = "Provincia obligatoria."
+        if not form_data["municipality"]:
+            errors["municipality"] = "Municipio obligatorio."
+
+        category = None
+        if form_data["category_id"]:
+            try:
+                category = Category.query.get(int(form_data["category_id"]))
+            except Exception:
+                errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
         existing_media_count = len(get_media_payload(post))
         if slug == "residencia-represor":
-            if not repressor_name:
-                flash("Debes indicar el nombre o apodo del represor.", "error")
-                return redirect(url_for("admin.edit_report", post_id=post.id))
+            if not form_data["repressor_name"]:
+                errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if existing_media_count < 1:
-                flash("Debes subir al menos una imagen del represor.", "error")
-                return redirect(url_for("admin.edit_report", post_id=post.id))
+                errors["images"] = "Debes subir al menos una imagen del represor."
         if slug == "otros":
-            if not other_type:
-                flash("Debes especificar el tipo en la categoría Otros.", "error")
-                return redirect(url_for("admin.edit_report", post_id=post.id))
-            if not is_other_type_allowed(other_type):
-                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
-                return redirect(url_for("admin.edit_report", post_id=post.id))
+            if not form_data["other_type"]:
+                errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
+            elif not is_other_type_allowed(form_data["other_type"]):
+                errors["other_type"] = (
+                    "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente."
+                )
+
+        if errors:
+            return render_template(
+                "admin/edit_report.html",
+                post=post,
+                categories=categories,
+                links=links,
+                form_links=links_list,
+                form_data=form_data,
+                errors=errors,
+                media_items=get_media_payload(post),
+                provinces=list_provinces(),
+                municipalities_map=municipalities_map(),
+            )
 
         moderation_enabled = get_setting("moderation_enabled", "true") == "true"
 
@@ -302,18 +350,18 @@ def edit_report(post_id):
                 post_id=post.id,
                 editor_id=current_user.id if current_user.is_authenticated else None,
                 editor_label=editor_label,
-                reason=edit_reason,
-                title=title,
-                description=description,
+                reason=form_data["edit_reason"],
+                title=form_data["title"],
+                description=form_data["description"],
                 latitude=lat,
                 longitude=lng,
-                address=address or None,
+                address=form_data["address"] or None,
                 province=province or None,
                 municipality=municipality or None,
-                repressor_name=repressor_name or None,
-                other_type=other_type or None,
-                category_id=int(category_id),
-                polygon_geojson=polygon_geojson or None,
+                repressor_name=form_data["repressor_name"] or None,
+                other_type=form_data["other_type"] or None,
+                category_id=int(form_data["category_id"]),
+                polygon_geojson=form_data["polygon_geojson"] or None,
                 links_json=json.dumps(links_list) if links_list else None,
             )
             db.session.add(edit_req)
@@ -326,7 +374,7 @@ def edit_report(post_id):
             post_id=post.id,
             editor_id=current_user.id if current_user.is_authenticated else None,
             editor_label=editor_label,
-            reason=edit_reason,
+            reason=form_data["edit_reason"],
             title=post.title,
             description=post.description,
             latitude=post.latitude,
@@ -343,17 +391,17 @@ def edit_report(post_id):
         )
         db.session.add(revision)
 
-        post.title = title
-        post.description = description
-        post.category_id = int(category_id)
+        post.title = form_data["title"]
+        post.description = form_data["description"]
+        post.category_id = int(form_data["category_id"])
         post.latitude = lat
         post.longitude = lng
-        post.address = address or None
+        post.address = form_data["address"] or None
         post.province = province or None
         post.municipality = municipality or None
-        post.repressor_name = repressor_name or None
-        post.other_type = other_type or None
-        post.polygon_geojson = polygon_geojson or None
+        post.repressor_name = form_data["repressor_name"] or None
+        post.other_type = form_data["other_type"] or None
+        post.polygon_geojson = form_data["polygon_geojson"] or None
         post.links_json = json.dumps(links_list) if links_list else None
         db.session.commit()
 
@@ -368,6 +416,9 @@ def edit_report(post_id):
         media_items=get_media_payload(post),
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
+        form_data=None,
+        errors={},
+        form_links=links,
     )
 
 
