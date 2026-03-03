@@ -1654,10 +1654,32 @@ textarea {
   margin-top: 24px;
 }
 
+.bulk-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.bulk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .pending-card {
   display: grid;
   gap: 16px;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: start;
   padding: 16px;
   border-radius: 10px;
@@ -1665,7 +1687,18 @@ textarea {
   background: #0f151a;
 }
 
+.bulk-cell {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 6px;
+}
+
 .pending-card .actions {
+  display: grid;
+  gap: 8px;
+}
+
+.status-form form {
   display: grid;
   gap: 8px;
 }

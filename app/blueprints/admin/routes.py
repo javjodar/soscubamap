@@ -181,6 +181,30 @@ def update_report_status(post_id):
     return redirect(url_for("admin.reports", status=request.args.get("status", "approved")))
 
 
+@admin_bp.route("/reportes/bulk-delete", methods=["POST"])
+@login_required
+@role_required("administrador")
+def bulk_delete_reports():
+    ids = request.form.getlist("selected_ids")
+    status = request.args.get("status", "approved")
+    if not ids:
+        flash("Selecciona al menos un reporte.", "error")
+        return redirect(url_for("admin.reports", status=status))
+
+    try:
+        id_list = [int(i) for i in ids]
+    except Exception:
+        flash("Selección inválida.", "error")
+        return redirect(url_for("admin.reports", status=status))
+
+    posts = Post.query.filter(Post.id.in_(id_list)).all()
+    for post in posts:
+        post.status = "deleted"
+    db.session.commit()
+    flash(f"Reportes eliminados: {len(posts)}.", "success")
+    return redirect(url_for("admin.reports", status=status))
+
+
 @admin_bp.route("/reportes/<int:post_id>/editar", methods=["GET", "POST"])
 @login_required
 @role_required("administrador")

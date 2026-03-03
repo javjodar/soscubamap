@@ -6,34 +6,63 @@
 
   <div class="pending-list">
     {% if posts %}
-      {% for post in posts %}
-        <div class="pending-card">
-          <div>
-            <h3>{{ post.title }}</h3>
-            <div class="muted">{{ post.category.name }}</div>
-            <div class="muted">{{ post.author.anon_code if post.author else 'Anon' }}</div>
-            <p>{{ post.description }}</p>
-            <div class="muted">{{ post.latitude }}, {{ post.longitude }}</div>
-            <div class="muted">{{ post.created_at }}</div>
-          </div>
-          <div class="actions">
-            <form method="post" action="{{ url_for('admin.update_report_status', post_id=post.id, status=status) }}">
-              <select name="status">
-                <option value="approved" {% if post.status == 'approved' %}selected{% endif %}>Activo</option>
-                <option value="hidden" {% if post.status == 'hidden' %}selected{% endif %}>Oculto</option>
-                <option value="pending" {% if post.status == 'pending' %}selected{% endif %}>Pendiente</option>
-                <option value="rejected" {% if post.status == 'rejected' %}selected{% endif %}>Rechazado</option>
-                <option value="deleted" {% if post.status == 'deleted' %}selected{% endif %}>Eliminado</option>
-              </select>
-              <button class="btn-primary" type="submit">Actualizar</button>
-            </form>
-            <a class="btn-secondary" href="{{ url_for('admin.edit_report', post_id=post.id) }}">Editar</a>
-          </div>
+      <form method="post" action="{{ url_for('admin.bulk_delete_reports', status=status) }}" class="bulk-actions">
+        <div class="bulk-header">
+          <label class="bulk-select">
+            <input type="checkbox" id="selectAllReports" />
+            Seleccionar todo
+          </label>
+          <button class="btn-secondary" type="submit" onclick="return confirm('¿Eliminar los reportes seleccionados?');">
+            Eliminar seleccionados
+          </button>
         </div>
-      {% endfor %}
+        {% for post in posts %}
+          <div class="pending-card">
+            <div class="bulk-cell">
+              <input type="checkbox" class="report-select" name="selected_ids" value="{{ post.id }}" />
+            </div>
+            <div>
+              <h3>{{ post.title }}</h3>
+              <div class="muted">{{ post.category.name }}</div>
+              <div class="muted">{{ post.author.anon_code if post.author else 'Anon' }}</div>
+              <p>{{ post.description }}</p>
+              <div class="muted">{{ post.latitude }}, {{ post.longitude }}</div>
+              <div class="muted">{{ post.created_at }}</div>
+            </div>
+            <div class="actions">
+              <div class="status-form">
+                <form id="status-form-{{ post.id }}" method="post" action="{{ url_for('admin.update_report_status', post_id=post.id, status=status) }}">
+                  <select name="status">
+                    <option value="approved" {% if post.status == 'approved' %}selected{% endif %}>Activo</option>
+                    <option value="hidden" {% if post.status == 'hidden' %}selected{% endif %}>Oculto</option>
+                    <option value="pending" {% if post.status == 'pending' %}selected{% endif %}>Pendiente</option>
+                    <option value="rejected" {% if post.status == 'rejected' %}selected{% endif %}>Rechazado</option>
+                    <option value="deleted" {% if post.status == 'deleted' %}selected{% endif %}>Eliminado</option>
+                  </select>
+                  <button class="btn-primary" type="submit">Actualizar</button>
+                </form>
+              </div>
+              <a class="btn-secondary" href="{{ url_for('admin.edit_report', post_id=post.id) }}">Editar</a>
+            </div>
+          </div>
+        {% endfor %}
+      </form>
     {% else %}
       <div class="muted">No hay reportes para este estado.</div>
     {% endif %}
   </div>
 </section>
+
+<script>
+  const selectAll = document.getElementById("selectAllReports");
+  const items = document.querySelectorAll(".report-select");
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      items.forEach((box) => {
+        box.checked = selectAll.checked;
+      });
+    });
+  }
+
+</script>
 {% endblock %}
