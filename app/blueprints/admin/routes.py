@@ -211,6 +211,9 @@ def edit_report(post_id):
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))
+        if len(description) < 50:
+            flash("La descripción debe tener al menos 50 caracteres.", "error")
+            return redirect(url_for("admin.edit_report", post_id=post.id))
         if not edit_reason:
             flash("El motivo de edición es obligatorio.", "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))

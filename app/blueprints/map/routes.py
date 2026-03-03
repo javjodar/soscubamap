@@ -120,6 +120,9 @@ def new_post():
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("map.new_post"))
+        if len(description) < 50:
+            flash("La descripción debe tener al menos 50 caracteres.", "error")
+            return redirect(url_for("map.new_post"))
         if images:
             ok, error = validate_files(images)
             if not ok:
@@ -323,6 +326,9 @@ def edit_report_public(post_id):
 
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
+        if len(description) < 50:
+            flash("La descripción debe tener al menos 50 caracteres.", "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
         if not edit_reason:
             flash("El motivo de edición es obligatorio.", "error")
