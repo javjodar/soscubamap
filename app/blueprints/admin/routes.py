@@ -15,6 +15,8 @@ from app.extensions import db
 from app.models.media import Media
 from app.services.media_upload import media_json_from_post, parse_media_json, get_media_payload
 from app.services.input_safety import has_malicious_input
+from app.services.content_quality import validate_title, validate_description
+from app.services.category_rules import is_other_type_allowed
 from app.services.geo_lookup import lookup_location, list_provinces, municipalities_map
 from flask_login import current_user
 import json
@@ -241,8 +243,16 @@ def edit_report(post_id):
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))
+        ok_title, msg_title = validate_title(title)
+        if not ok_title:
+            flash(msg_title, "error")
+            return redirect(url_for("admin.edit_report", post_id=post.id))
         if len(description) < 50:
             flash("La descripción debe tener al menos 50 caracteres.", "error")
+            return redirect(url_for("admin.edit_report", post_id=post.id))
+        ok_desc, msg_desc = validate_description(description)
+        if not ok_desc:
+            flash(msg_desc, "error")
             return redirect(url_for("admin.edit_report", post_id=post.id))
         if not edit_reason:
             flash("El motivo de edición es obligatorio.", "error")
@@ -273,6 +283,9 @@ def edit_report(post_id):
         if slug == "otros":
             if not other_type:
                 flash("Debes especificar el tipo en la categoría Otros.", "error")
+                return redirect(url_for("admin.edit_report", post_id=post.id))
+            if not is_other_type_allowed(other_type):
+                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
                 return redirect(url_for("admin.edit_report", post_id=post.id))
 
         moderation_enabled = get_setting("moderation_enabled", "true") == "true"

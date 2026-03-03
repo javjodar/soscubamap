@@ -96,6 +96,18 @@ function setupCategoryRequirements() {
           }
         }
       }
+      if (slug === "otros") {
+        const value = (otherInput?.value || "").toLowerCase();
+        if (/(represor|represores|chivato|chivata|chivatos|chivatas|informante|informantes|delator|delatores|dse|dgi)/i.test(value)) {
+          e.preventDefault();
+          if (otherInput) otherInput.focus();
+          if (status) {
+            status.textContent = "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.";
+          } else {
+            alert("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.");
+          }
+        }
+      }
     });
   }
 

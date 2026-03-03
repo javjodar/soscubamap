@@ -23,6 +23,8 @@ from app.services.media_upload import (
 )
 from app.services.recaptcha import verify_recaptcha, recaptcha_enabled
 from app.services.input_safety import has_malicious_input
+from app.services.content_quality import validate_title, validate_description
+from app.services.category_rules import is_other_type_allowed
 from app.extensions import db, limiter
 from . import map_bp
 
@@ -127,8 +129,16 @@ def new_post():
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("map.new_post"))
+        ok_title, msg_title = validate_title(title)
+        if not ok_title:
+            flash(msg_title, "error")
+            return redirect(url_for("map.new_post"))
         if len(description) < 50:
             flash("La descripción debe tener al menos 50 caracteres.", "error")
+            return redirect(url_for("map.new_post"))
+        ok_desc, msg_desc = validate_description(description)
+        if not ok_desc:
+            flash(msg_desc, "error")
             return redirect(url_for("map.new_post"))
 
         category = Category.query.get(int(category_id)) if category_id else None
@@ -143,6 +153,9 @@ def new_post():
         if slug == "otros":
             if not other_type:
                 flash("Debes especificar el tipo en la categoría Otros.", "error")
+                return redirect(url_for("map.new_post"))
+            if not is_other_type_allowed(other_type):
+                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
                 return redirect(url_for("map.new_post"))
         if images:
             ok, error = validate_files(images)
@@ -358,8 +371,16 @@ def edit_report_public(post_id):
         if not title or not description or not category_id or not latitude or not longitude:
             flash("Completa todos los campos obligatorios.", "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
+        ok_title, msg_title = validate_title(title)
+        if not ok_title:
+            flash(msg_title, "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
         if len(description) < 50:
             flash("La descripción debe tener al menos 50 caracteres.", "error")
+            return redirect(url_for("map.edit_report_public", post_id=post.id))
+        ok_desc, msg_desc = validate_description(description)
+        if not ok_desc:
+            flash(msg_desc, "error")
             return redirect(url_for("map.edit_report_public", post_id=post.id))
 
         category = Category.query.get(int(category_id)) if category_id else None
@@ -375,6 +396,9 @@ def edit_report_public(post_id):
         if slug == "otros":
             if not other_type:
                 flash("Debes especificar el tipo en la categoría Otros.", "error")
+                return redirect(url_for("map.edit_report_public", post_id=post.id))
+            if not is_other_type_allowed(other_type):
+                flash("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.", "error")
                 return redirect(url_for("map.edit_report_public", post_id=post.id))
         if not edit_reason:
             flash("El motivo de edición es obligatorio.", "error")
