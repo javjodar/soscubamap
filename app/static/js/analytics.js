@@ -80,6 +80,7 @@ const buildLine = (ctx, label, labels, data, extra = {}) =>
       plugins: {
         legend: { display: false },
       },
+      layout: { padding: 8 },
       scales: {
         x: {
           grid: { color: THEME.grid },
@@ -106,6 +107,7 @@ const buildMultiLine = (ctx, labels, datasets) =>
         x: { grid: { color: THEME.grid }, ticks: { color: THEME.muted } },
         y: { beginAtZero: true, grid: { color: THEME.grid }, ticks: { color: THEME.muted } },
       },
+      layout: { padding: 8 },
       plugins: {
         legend: {
           labels: { color: THEME.text },
@@ -133,6 +135,7 @@ const buildBar = (ctx, labels, data, horizontal = false) =>
       maintainAspectRatio: false,
       indexAxis: horizontal ? "y" : "x",
       plugins: { legend: { display: false } },
+      layout: { padding: 8 },
       scales: {
         x: { beginAtZero: true, grid: { color: THEME.grid }, ticks: { color: THEME.muted } },
         y: { beginAtZero: true, grid: { color: THEME.grid }, ticks: { color: THEME.muted } },
@@ -155,6 +158,7 @@ const buildDonut = (ctx, labels, data) =>
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: 8 },
       plugins: {
         legend: {
           position: "bottom",
@@ -173,7 +177,7 @@ const destroyChart = (id) => {
 
 const ensureCanvasHeight = () => {
   document.querySelectorAll(".analytics-card canvas").forEach((canvas) => {
-    canvas.parentElement.style.height = "320px";
+    canvas.style.height = "240px";
   });
 };
 

@@ -1,13 +1,15 @@
 :root {
-  --bg: #0b0f12;
-  --bg-elev: #12181d;
-  --text: #dfe7ef;
-  --muted: #8b96a3;
+  --bg: #05070a;
+  --bg-elev: #0b1114;
+  --text: #d6fbe7;
+  --muted: #7ad2b4;
   --accent: #6ee7b7;
-  --accent-2: #9bd1ff;
-  --danger: #f97316;
-  --border: #1f2a33;
-  --shadow: rgba(0, 0, 0, 0.45);
+  --accent-2: #5ad8ff;
+  --danger: #ff7b57;
+  --border: rgba(110, 231, 183, 0.2);
+  --shadow: rgba(0, 0, 0, 0.55);
+  --intel-border: rgba(110, 231, 183, 0.22);
+  --intel-glow: 0 0 0 1px rgba(110, 231, 183, 0.14), 0 18px 30px var(--shadow);
 }
 
 * {
@@ -16,12 +18,23 @@
 
 body {
   margin: 0;
-  font-family: "Space Grotesk", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-  background: radial-gradient(circle at top left, #141a20 0%, #0b0f12 45%, #070a0c 100%);
+  font-family: "IBM Plex Mono", "Space Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle at top left, rgba(110, 231, 183, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(90, 216, 255, 0.12) 0%, transparent 48%),
+    repeating-linear-gradient(0deg, rgba(110, 231, 183, 0.04) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(110, 231, 183, 0.03) 0 1px, transparent 1px 12px);
   color: var(--text);
   min-height: 100vh;
   touch-action: manipulation;
   overflow-x: hidden;
+}
+
+h1,
+h2,
+h3 {
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .site-header {
@@ -29,8 +42,8 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 24px 48px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(6, 10, 12, 0.9);
+  border-bottom: 1px solid var(--intel-border);
+  background: linear-gradient(135deg, rgba(9, 14, 18, 0.92) 0%, rgba(10, 20, 17, 0.95) 100%);
   backdrop-filter: blur(6px);
   position: sticky;
   top: 0;
@@ -1467,19 +1480,20 @@ textarea {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #0b0f12;
-  border: none;
+  background: linear-gradient(135deg, #62f5c2 0%, #4dd7b2 100%);
+  color: #04100c;
+  border: 1px solid rgba(110, 231, 183, 0.65);
   padding: 12px 16px;
   border-radius: 8px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
   cursor: pointer;
+  box-shadow: 0 10px 18px rgba(110, 231, 183, 0.25);
 }
 
 .btn-primary:hover {
-  background: #5adbb0;
+  background: linear-gradient(135deg, #72ffd0 0%, #5ce6c2 100%);
 }
 
 .btn-cta {
@@ -1644,9 +1658,9 @@ textarea {
 }
 
 .btn-secondary {
-  background: transparent;
+  background: rgba(6, 10, 12, 0.6);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--intel-border);
   padding: 12px 16px;
   border-radius: 8px;
   text-transform: uppercase;
@@ -1655,8 +1669,8 @@ textarea {
 }
 
 .btn-secondary:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: rgba(110, 231, 183, 0.7);
+  color: #9ef5cc;
 }
 
 .links-group {
@@ -2072,6 +2086,60 @@ textarea {
   color: var(--accent);
   text-decoration: none;
   font-weight: 600;
+}
+
+.legend,
+.chatbox,
+.console-header,
+.console-body,
+.report-card,
+.image-preview-card,
+.discussion-modal-content,
+.category-card,
+.panel,
+.donate-card,
+.pending-card,
+.history-card,
+.api-hero,
+.api-section,
+.export-hero,
+.export-notes,
+.analytics-hero,
+.analytics-filters,
+.analytics-card,
+.analytics-notes {
+  background: linear-gradient(145deg, #0b1114 0%, #0c1b17 60%, #0a0f12 100%);
+  border: 1px solid var(--intel-border);
+  box-shadow: var(--intel-glow);
+}
+
+.legend-title,
+.console-title,
+.category-name,
+.report-card h3,
+.pending-card h3,
+.history-card h4 {
+  color: #9ef5cc;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.console-link {
+  color: #9ef5cc;
+}
+
+.console-link:hover {
+  color: #d6fbe7;
+}
+
+.nav-links a {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.site-footer {
+  border-top: 1px solid var(--intel-border);
+  background: linear-gradient(135deg, rgba(9, 14, 18, 0.92) 0%, rgba(10, 20, 17, 0.95) 100%);
 }
 
 .analytics-page {
