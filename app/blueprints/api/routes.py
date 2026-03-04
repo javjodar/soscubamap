@@ -30,6 +30,7 @@ from app.models.discussion_comment import DiscussionComment
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
 from app.models.category import Category
+from sqlalchemy import func
 from . import api_bp
 
 
@@ -231,6 +232,241 @@ def report_detail_v1(post_id):
 @api_bp.route("/v1/categories")
 def categories_v1():
     return categories()
+
+
+def _parse_date(value: str):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except Exception:
+        return None
+
+
+@api_bp.route("/v1/analytics")
+@limiter.limit("60/minute")
+def analytics_v1():
+    start_raw = (request.args.get("start") or "").strip()
+    end_raw = (request.args.get("end") or "").strip()
+    category_id = request.args.get("category_id")
+    province = (request.args.get("province") or "").strip()
+
+    end_dt = _parse_date(end_raw) or datetime.utcnow()
+    start_dt = _parse_date(start_raw) or (end_dt - timedelta(days=90))
+    if start_dt > end_dt:
+        start_dt, end_dt = end_dt, start_dt
+    end_dt = end_dt.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    active_statuses = ["approved", "pending", "rejected", "hidden"]
+
+    base_query = Post.query.filter(
+        Post.created_at >= start_dt,
+        Post.created_at <= end_dt,
+        Post.status.in_(active_statuses),
+    )
+    if category_id:
+        try:
+            base_query = base_query.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        base_query = base_query.filter(Post.province == province)
+
+    reports_over_time = (
+        db.session.query(
+            func.date_trunc("day", Post.created_at).label("day"),
+            func.count(Post.id),
+        )
+        .filter(
+            Post.created_at >= start_dt,
+            Post.created_at <= end_dt,
+            Post.status.in_(active_statuses),
+        )
+        .group_by(func.date_trunc("day", Post.created_at))
+        .order_by(func.date_trunc("day", Post.created_at))
+    )
+    if category_id:
+        try:
+            reports_over_time = reports_over_time.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        reports_over_time = reports_over_time.filter(Post.province == province)
+
+    reports_series = [
+        {"date": row[0].date().isoformat(), "count": row[1]}
+        for row in reports_over_time.all()
+    ]
+
+    category_distribution = (
+        db.session.query(Category.id, Category.name, func.count(Post.id))
+        .join(Post, Post.category_id == Category.id)
+        .filter(
+            Post.created_at >= start_dt,
+            Post.created_at <= end_dt,
+            Post.status.in_(active_statuses),
+        )
+        .group_by(Category.id, Category.name)
+        .order_by(func.count(Post.id).desc())
+    )
+    if category_id:
+        try:
+            category_distribution = category_distribution.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        category_distribution = category_distribution.filter(Post.province == province)
+
+    category_items = [
+        {"id": row[0], "name": row[1], "count": row[2]}
+        for row in category_distribution.all()
+    ]
+
+    province_distribution = (
+        db.session.query(Post.province, func.count(Post.id))
+        .filter(
+            Post.created_at >= start_dt,
+            Post.created_at <= end_dt,
+            Post.status.in_(active_statuses),
+            Post.province.isnot(None),
+            Post.province != "",
+        )
+        .group_by(Post.province)
+        .order_by(func.count(Post.id).desc())
+        .limit(10)
+    )
+    if category_id:
+        try:
+            province_distribution = province_distribution.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        province_distribution = province_distribution.filter(Post.province == province)
+
+    province_items = [
+        {"name": row[0], "count": row[1]} for row in province_distribution.all()
+    ]
+
+    municipality_distribution = (
+        db.session.query(Post.municipality, func.count(Post.id))
+        .filter(
+            Post.created_at >= start_dt,
+            Post.created_at <= end_dt,
+            Post.status.in_(active_statuses),
+            Post.municipality.isnot(None),
+            Post.municipality != "",
+        )
+        .group_by(Post.municipality)
+        .order_by(func.count(Post.id).desc())
+        .limit(10)
+    )
+    if category_id:
+        try:
+            municipality_distribution = municipality_distribution.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        municipality_distribution = municipality_distribution.filter(Post.province == province)
+
+    municipality_items = [
+        {"name": row[0], "count": row[1]} for row in municipality_distribution.all()
+    ]
+
+    moderation_status = (
+        db.session.query(Post.status, func.count(Post.id))
+        .filter(Post.created_at >= start_dt, Post.created_at <= end_dt)
+        .group_by(Post.status)
+        .all()
+    )
+    moderation_map = {status: count for status, count in moderation_status}
+
+    top_verified = (
+        Post.query.options(selectinload(Post.category))
+        .filter(
+            Post.created_at >= start_dt,
+            Post.created_at <= end_dt,
+            Post.status == "approved",
+        )
+        .order_by(Post.verify_count.desc().nullslast(), Post.created_at.desc())
+    )
+    if category_id:
+        try:
+            top_verified = top_verified.filter(Post.category_id == int(category_id))
+        except ValueError:
+            pass
+    if province:
+        top_verified = top_verified.filter(Post.province == province)
+
+    top_verified_items = [
+        {"id": p.id, "title": p.title, "verify_count": p.verify_count or 0}
+        for p in top_verified.limit(10).all()
+    ]
+
+    comment_query = (
+        db.session.query(
+            func.date_trunc("day", Comment.created_at).label("day"),
+            func.count(Comment.id),
+        )
+        .filter(Comment.created_at >= start_dt, Comment.created_at <= end_dt)
+        .group_by(func.date_trunc("day", Comment.created_at))
+        .order_by(func.date_trunc("day", Comment.created_at))
+    )
+    discussion_comment_query = (
+        db.session.query(
+            func.date_trunc("day", DiscussionComment.created_at).label("day"),
+            func.count(DiscussionComment.id),
+        )
+        .filter(
+            DiscussionComment.created_at >= start_dt,
+            DiscussionComment.created_at <= end_dt,
+        )
+        .group_by(func.date_trunc("day", DiscussionComment.created_at))
+        .order_by(func.date_trunc("day", DiscussionComment.created_at))
+    )
+
+    report_comments = {row[0].date().isoformat(): row[1] for row in comment_query.all()}
+    discussion_comments = {
+        row[0].date().isoformat(): row[1] for row in discussion_comment_query.all()
+    }
+    labels = sorted(set(report_comments.keys()) | set(discussion_comments.keys()))
+    report_counts = [report_comments.get(label, 0) for label in labels]
+    discussion_counts = [discussion_comments.get(label, 0) for label in labels]
+
+    edit_status_query = (
+        db.session.query(PostEditRequest.status, func.count(PostEditRequest.id))
+        .filter(PostEditRequest.created_at >= start_dt, PostEditRequest.created_at <= end_dt)
+        .group_by(PostEditRequest.status)
+        .all()
+    )
+    edit_status_map = {status: count for status, count in edit_status_query}
+
+    return jsonify(
+        {
+            "range": {
+                "start": start_dt.date().isoformat(),
+                "end": end_dt.date().isoformat(),
+            },
+            "reports_over_time": reports_series,
+            "category_distribution": category_items,
+            "province_distribution": province_items,
+            "municipality_distribution": municipality_items,
+            "moderation_status": {
+                "approved": moderation_map.get("approved", 0),
+                "pending": moderation_map.get("pending", 0),
+                "rejected": moderation_map.get("rejected", 0),
+                "hidden": moderation_map.get("hidden", 0),
+            },
+            "top_verified": top_verified_items,
+            "comments_over_time": {
+                "labels": labels,
+                "report_counts": report_counts,
+                "discussion_counts": discussion_counts,
+            },
+            "edit_status": {
+                "pending": edit_status_map.get("pending", 0),
+                "approved": edit_status_map.get("approved", 0),
+                "rejected": edit_status_map.get("rejected", 0),
+            },
+        }
+    )
 
 
 def _get_or_create_anon_user():

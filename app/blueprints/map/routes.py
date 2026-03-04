@@ -262,6 +262,16 @@ def api_docs():
     return render_template("map/api_docs.html", base_url=base_url)
 
 
+@map_bp.route("/analiticas")
+def analytics():
+    categories = Category.query.order_by(Category.id.asc()).all()
+    return render_template(
+        "map/analytics.html",
+        categories=categories,
+        provinces=list_provinces(),
+    )
+
+
 @map_bp.route("/nuevo", methods=["GET", "POST"])
 @limiter.limit("3/minute; 30/day", methods=["POST"])
 def new_post():

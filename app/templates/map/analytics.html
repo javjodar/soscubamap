@@ -1,0 +1,91 @@
+{% extends "shared/base.html" %}
+
+{% block title %} · Analíticas{% endblock %}
+
+{% block content %}
+<section class="analytics-page">
+  <div class="analytics-hero">
+    <h1>Analíticas públicas</h1>
+    <p>
+      Transparencia total sobre la actividad del mapa. Puedes filtrar por fecha,
+      categoría o provincia.
+    </p>
+  </div>
+
+  <div class="analytics-filters">
+    <div class="filter-group">
+      <label for="analyticsStart">Desde</label>
+      <input id="analyticsStart" type="date" />
+    </div>
+    <div class="filter-group">
+      <label for="analyticsEnd">Hasta</label>
+      <input id="analyticsEnd" type="date" />
+    </div>
+    <div class="filter-group">
+      <label for="analyticsCategory">Categoría</label>
+      <select id="analyticsCategory">
+        <option value="">Todas</option>
+        {% for cat in categories %}
+          <option value="{{ cat.id }}">{{ cat.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="analyticsProvince">Provincia</label>
+      <select id="analyticsProvince">
+        <option value="">Todas</option>
+        {% for prov in provinces %}
+          <option value="{{ prov }}">{{ prov }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button id="analyticsRefresh" class="btn-primary" type="button">Actualizar</button>
+  </div>
+
+  <div class="analytics-grid">
+    <div class="analytics-card">
+      <h2>Evolución de reportes</h2>
+      <canvas id="reportsOverTime"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Estado de moderación</h2>
+      <canvas id="moderationStatus"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Distribución por categoría</h2>
+      <canvas id="categoryDistribution"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Top 10 provincias</h2>
+      <canvas id="provinceDistribution"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Top 10 municipios</h2>
+      <canvas id="municipalityDistribution"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Reportes más verificados</h2>
+      <canvas id="topVerified"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Actividad de comentarios</h2>
+      <canvas id="commentsOverTime"></canvas>
+    </div>
+    <div class="analytics-card">
+      <h2>Ediciones y revisiones</h2>
+      <canvas id="editStatus"></canvas>
+    </div>
+  </div>
+
+  <div class="analytics-notes">
+    <h3>Notas de transparencia</h3>
+    <ul>
+      <li>Los gráficos muestran datos públicos y agregados.</li>
+      <li>Si necesitas endpoints de escritura, contáctanos en <a href="mailto:soscubamap@proton.me">soscubamap@proton.me</a>.</li>
+    </ul>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+{% endblock %}
