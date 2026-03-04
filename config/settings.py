@@ -37,4 +37,4 @@ class Config:
     TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "1") == "1"
     RECAPTCHA_V2_SITE_KEY = os.getenv("RECAPTCHA_V2_SITE_KEY", "")
     RECAPTCHA_V2_SECRET_KEY = os.getenv("RECAPTCHA_V2_SECRET_KEY", "")
-    CHAT_DISABLED = os.getenv("CHAT_DISABLED", "1") == "1"
+    CHAT_DISABLED = os.getenv("CHAT_DISABLED", "0") == "1"

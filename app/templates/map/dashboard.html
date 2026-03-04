@@ -100,8 +100,6 @@
   </div>
 </section>
 
-{# Chat interno desactivado temporalmente. #}
-{# 
 <section id="chatbox" class="chatbox">
   <div class="chat-header">
     <div class="chat-title">Chat colaborativo</div>
@@ -124,24 +122,6 @@
     </label>
     <button type="submit" class="btn-primary chat-send">Enviar</button>
   </form>
-</section>
-#}
-
-<section id="chatbox" class="chatbox">
-  <div class="chat-header">
-    <div class="chat-title">Chat IRC (#soscubamap)</div>
-    <div class="chat-meta">
-      <span class="chat-status">Libera.chat · Gamja</span>
-    </div>
-  </div>
-  <div class="chat-embed">
-    <iframe
-      title="Chat IRC #soscubamap"
-      src="https://web.libera.chat/?theme=nightswatch#soscubamap"
-      loading="lazy"
-      referrerpolicy="no-referrer"
-    ></iframe>
-  </div>
 </section>
 
 <section class="live-console">
@@ -176,7 +156,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
-{# Chat interno desactivado: no cargar chat.js #}
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 <script>
   window.CUBA_MUNICIPALITIES = {{ municipalities_map|tojson }};
 </script>
