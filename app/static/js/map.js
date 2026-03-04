@@ -68,6 +68,7 @@ function setupMapImageModal() {
 
 const CATEGORY_ICONS = {
   "accion-represiva": "fa-hand-fist",
+  "movimiento-tropas": "fa-bolt",
   "residencia-represor": "fa-house-chimney-user",
   "centro-penitenciario": "fa-landmark-dome",
   "estacion-policia": "fa-building-shield",
@@ -83,9 +84,18 @@ const CATEGORY_IMAGES = {
   "sede-pcc": "/static/img/Communist_Party_of_Cuba_logo.svg.png",
 };
 
-function buildMarkerContent(iconClass, imageUrl) {
+const ALERT_SLUGS = new Set(["accion-represiva", "movimiento-tropas"]);
+
+function isAlertCategory(slug) {
+  return ALERT_SLUGS.has(slug);
+}
+
+function buildMarkerContent(iconClass, imageUrl, slug) {
   const wrapper = document.createElement("div");
   wrapper.className = "pin-icon";
+  if (isAlertCategory(slug)) {
+    wrapper.classList.add("alert");
+  }
   if (imageUrl) {
     const img = document.createElement("img");
     img.src = imageUrl;
@@ -145,8 +155,9 @@ function renderMarkers(posts) {
   clearMarkers();
   posts.forEach((post) => {
     const position = { lat: post.latitude, lng: post.longitude };
-    const iconClass = CATEGORY_ICONS[post.category.slug] || "fa-location-dot";
-    const imageUrl = CATEGORY_IMAGES[post.category.slug];
+    const slug = post.category?.slug;
+    const iconClass = CATEGORY_ICONS[slug] || "fa-location-dot";
+    const imageUrl = CATEGORY_IMAGES[slug];
     let marker;
 
     if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
@@ -154,7 +165,7 @@ function renderMarkers(posts) {
         position,
         map,
         title: post.title,
-        content: buildMarkerContent(iconClass, imageUrl),
+        content: buildMarkerContent(iconClass, imageUrl, slug),
       });
     } else {
       marker = new google.maps.Marker({
@@ -432,8 +443,9 @@ function updateLegendCounts(posts) {
 window.handleNewReport = function (payload) {
   if (!payload || !map) return;
   const position = { lat: payload.latitude, lng: payload.longitude };
-  const iconClass = CATEGORY_ICONS[payload.category?.slug] || "fa-location-dot";
-  const imageUrl = CATEGORY_IMAGES[payload.category?.slug];
+  const slug = payload.category?.slug;
+  const iconClass = CATEGORY_ICONS[slug] || "fa-location-dot";
+  const imageUrl = CATEGORY_IMAGES[slug];
 
   if (payload.status !== "approved") {
     let marker;
@@ -442,7 +454,7 @@ window.handleNewReport = function (payload) {
         position,
         map,
         title: payload.title || "Reporte pendiente",
-        content: buildMarkerContent("fa-hourglass-half", imageUrl),
+        content: buildMarkerContent("fa-hourglass-half", imageUrl, slug),
       });
     } else {
       marker = new google.maps.Marker({
@@ -469,6 +481,7 @@ window.handleNewReport = function (payload) {
     });
     info.open({ anchor: marker, map });
     refreshRecent();
+    refreshAlerts();
     return;
   }
 
@@ -488,7 +501,7 @@ window.handleNewReport = function (payload) {
       position,
       map,
       title: payload.title,
-      content: buildMarkerContent(iconClass, imageUrl),
+      content: buildMarkerContent(iconClass, imageUrl, slug),
     });
   } else {
     marker = new google.maps.Marker({
@@ -506,6 +519,7 @@ window.handleNewReport = function (payload) {
   map.panTo(position);
   markers.push(marker);
   refreshRecent();
+  refreshAlerts();
 };
 
 async function applyFilters() {
@@ -527,6 +541,11 @@ async function applyFilters() {
 
 async function loadRecent() {
   const res = await fetch("/api/posts?limit=8");
+  return await res.json();
+}
+
+async function loadAlerts() {
+  const res = await fetch("/api/posts?limit=40");
   return await res.json();
 }
 
@@ -589,12 +608,69 @@ function renderRecent(posts) {
   });
 }
 
+function renderAlerts(posts) {
+  const container = document.getElementById("alertFeed");
+  if (!container) return;
+
+  const alerts = (posts || []).filter((post) => isAlertCategory(post.category?.slug));
+  if (!alerts.length) {
+    container.innerHTML = `<div class="console-empty">Sin movimientos o acciones recientes.</div>`;
+    return;
+  }
+
+  container.innerHTML = alerts
+    .slice(0, 8)
+    .map((post) => {
+      const safeTitle = escapeHtml(post.title || "");
+      const safeCategory = escapeHtml(post.category?.name || "");
+      const safeProvince = escapeHtml(post.province || "N/D");
+      const safeMunicipality = escapeHtml(post.municipality || "N/D");
+      const locationText = `${safeProvince} · ${safeMunicipality}`;
+      const eventTime = post.movement_at || post.created_at;
+      const timeText = eventTime ? new Date(eventTime).toLocaleString("es-ES") : "";
+      return `
+        <div class="console-item">
+          <div>
+            <button class="console-title-row console-link" type="button" data-detail-url="/reporte/${post.id}">${safeTitle}</button>
+            <div class="console-meta">${safeCategory}</div>
+            <div class="console-meta">${locationText}</div>
+          </div>
+          <div class="console-side">
+            <div class="console-time">${timeText}</div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  container.querySelectorAll(".console-link").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.getAttribute("data-detail-url");
+      if (!url) return;
+      if (window.openReportModal) {
+        window.openReportModal(url);
+      } else {
+        window.location.href = url;
+      }
+    });
+  });
+}
+
 async function refreshRecent() {
   try {
     const posts = await loadRecent();
     renderRecent(posts);
   } catch (err) {
     // no-op for now
+  }
+}
+
+async function refreshAlerts() {
+  try {
+    const posts = await loadAlerts();
+    renderAlerts(posts);
+  } catch (err) {
+    // no-op
   }
 }
 
@@ -606,6 +682,7 @@ window.initMap = async function () {
   isAdmin = mapEl.dataset.isAdmin === "1";
   if (!apiKey) {
     refreshRecent();
+    refreshAlerts();
     return;
   }
 
@@ -695,6 +772,7 @@ window.initMap = async function () {
   allPosts = await loadPosts();
   await applyFilters();
   await refreshRecent();
+  await refreshAlerts();
 
   const filters = document.querySelectorAll(".category-checkbox");
   filters.forEach((checkbox) => {
@@ -765,7 +843,10 @@ window.initMap = async function () {
   if (recentTimer) {
     clearInterval(recentTimer);
   }
-  recentTimer = setInterval(refreshRecent, 8000);
+  recentTimer = setInterval(() => {
+    refreshRecent();
+    refreshAlerts();
+  }, 8000);
 };
 
 function focusSearchResult(geometry, label) {

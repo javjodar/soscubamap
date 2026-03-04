@@ -5,6 +5,11 @@ from app.models.category import Category
 
 DEFAULT_CATEGORIES = [
     ("Accion represiva del gobierno", "accion-represiva", "Operativos, detenciones y violencia estatal."),
+    (
+        "Movimiento de tropas",
+        "movimiento-tropas",
+        "Movimientos policiales, brigada especial o tropas. Indica fecha y hora del movimiento y describe tipo de tropas, armamento o motivo.",
+    ),
     ("Residencia de represor", "residencia-represor", "Direcciones o zonas asociadas a represores."),
     ("Centro Penitenciario", "centro-penitenciario", "Carceles y centros de detencion."),
     ("Estacion de Policia", "estacion-policia", "Unidades policiales y puestos."),

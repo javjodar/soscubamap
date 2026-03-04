@@ -76,6 +76,40 @@
         {% endif %}
       </label>
     </div>
+    <div id="movimientoFields" class="category-fields is-hidden">
+      <div class="category-alert">
+        Para “Movimiento de tropas” debes indicar fecha y hora del movimiento. En la descripción aclara tipo de tropas,
+        armamento observado o motivo de la movilización para evitar abuso de la app.
+      </div>
+      <div class="two-col">
+        <label>
+          Fecha del movimiento
+          <input
+            type="date"
+            name="movement_date"
+            id="movementDateInput"
+            value="{{ fd.movement_date if use_form else (post.movement_at.strftime('%Y-%m-%d') if post.movement_at else '') }}"
+            class="{{ 'field-error' if errors.get('movement_date') else '' }}"
+          />
+          {% if errors.get("movement_date") %}
+            <div class="field-error-msg">{{ errors.get("movement_date") }}</div>
+          {% endif %}
+        </label>
+        <label>
+          Hora del movimiento
+          <input
+            type="time"
+            name="movement_time"
+            id="movementTimeInput"
+            value="{{ fd.movement_time if use_form else (post.movement_at.strftime('%H:%M') if post.movement_at else '') }}"
+            class="{{ 'field-error' if errors.get('movement_time') else '' }}"
+          />
+          {% if errors.get("movement_time") %}
+            <div class="field-error-msg">{{ errors.get("movement_time") }}</div>
+          {% endif %}
+        </label>
+      </div>
+    </div>
     <label>
       Descripción
       <textarea name="description" rows="6" required minlength="50" class="{{ 'field-error' if errors.get('description') else '' }}">{{ fd.description if use_form else post.description }}</textarea>

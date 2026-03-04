@@ -20,6 +20,7 @@ class PostEditRequest(db.Model):
     address = db.Column(db.String(255))
     province = db.Column(db.String(120))
     municipality = db.Column(db.String(120))
+    movement_at = db.Column(db.DateTime)
     repressor_name = db.Column(db.String(160))
     other_type = db.Column(db.String(160))
     category_id = db.Column(db.Integer)

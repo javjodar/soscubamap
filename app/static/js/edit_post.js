@@ -64,8 +64,11 @@ function setupCategoryRequirements() {
   const select = document.getElementById("categorySelect");
   const residenciaFields = document.getElementById("residenciaFields");
   const otrosFields = document.getElementById("otrosFields");
+  const movimientoFields = document.getElementById("movimientoFields");
   const repressorInput = document.getElementById("repressorNameInput");
   const otherInput = document.getElementById("otherTypeInput");
+  const movementDateInput = document.getElementById("movementDateInput");
+  const movementTimeInput = document.getElementById("movementTimeInput");
   const imageInput = document.querySelector('input[name="images"]');
   const status = document.getElementById("editImageStatus");
   const form = document.querySelector(".form-grid");
@@ -75,10 +78,14 @@ function setupCategoryRequirements() {
     const slug = selected?.dataset?.slug || "";
     const isResidencia = slug === "residencia-represor";
     const isOtros = slug === "otros";
+    const isMovimiento = slug === "movimiento-tropas";
     if (residenciaFields) residenciaFields.classList.toggle("is-hidden", !isResidencia);
     if (otrosFields) otrosFields.classList.toggle("is-hidden", !isOtros);
+    if (movimientoFields) movimientoFields.classList.toggle("is-hidden", !isMovimiento);
     if (repressorInput) repressorInput.required = isResidencia;
     if (otherInput) otherInput.required = isOtros;
+    if (movementDateInput) movementDateInput.required = isMovimiento;
+    if (movementTimeInput) movementTimeInput.required = isMovimiento;
   };
 
   if (select) {
@@ -110,6 +117,18 @@ function setupCategoryRequirements() {
             status.textContent = "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.";
           } else {
             alert("El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.");
+          }
+        }
+      }
+      if (slug === "movimiento-tropas") {
+        const hasDate = movementDateInput && movementDateInput.value;
+        const hasTime = movementTimeInput && movementTimeInput.value;
+        if (!hasDate || !hasTime) {
+          e.preventDefault();
+          if (status) {
+            status.textContent = "Debes indicar fecha y hora del movimiento.";
+          } else {
+            alert("Debes indicar fecha y hora del movimiento.");
           }
         }
       }

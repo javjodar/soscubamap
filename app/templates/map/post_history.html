@@ -17,6 +17,9 @@
       {% if post.province or post.municipality %}
         <div><strong>Provincia:</strong> {{ post.province or 'N/D' }} · <strong>Municipio:</strong> {{ post.municipality or 'N/D' }}</div>
       {% endif %}
+      {% if post.movement_at %}
+        <div><strong>Movimiento:</strong> {{ post.movement_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      {% endif %}
       {% if post.address %}<div><strong>Dirección:</strong> {{ post.address }}</div>{% endif %}
       {% if post.links_json %}
         <div><strong>Enlaces:</strong>
@@ -50,6 +53,9 @@
             <div><strong>Coordenadas:</strong> {{ rev.latitude }}, {{ rev.longitude }}</div>
             {% if rev.province or rev.municipality %}
               <div><strong>Provincia:</strong> {{ rev.province or 'N/D' }} · <strong>Municipio:</strong> {{ rev.municipality or 'N/D' }}</div>
+            {% endif %}
+            {% if rev.movement_at %}
+              <div><strong>Movimiento:</strong> {{ rev.movement_at.strftime('%Y-%m-%d %H:%M') }}</div>
             {% endif %}
             {% if rev.address %}<div><strong>Dirección:</strong> {{ rev.address }}</div>{% endif %}
             {% if rev.links_json %}
@@ -101,6 +107,9 @@
             <div><strong>Coordenadas propuestas:</strong> {{ edit.latitude }}, {{ edit.longitude }}</div>
             {% if edit.province or edit.municipality %}
               <div><strong>Provincia:</strong> {{ edit.province or 'N/D' }} · <strong>Municipio:</strong> {{ edit.municipality or 'N/D' }}</div>
+            {% endif %}
+            {% if edit.movement_at %}
+              <div><strong>Movimiento:</strong> {{ edit.movement_at.strftime('%Y-%m-%d %H:%M') }}</div>
             {% endif %}
             {% if edit.address %}<div><strong>Dirección:</strong> {{ edit.address }}</div>{% endif %}
             {% if edit.repressor_name %}

@@ -34,6 +34,8 @@ from app.services.category_rules import is_other_type_allowed
 from app.extensions import db, limiter
 from . import map_bp
 
+URGENT_CATEGORY_SLUGS = {"accion-represiva", "movimiento-tropas"}
+
 
 def _get_chat_nick():
     allow_admin = current_user.is_authenticated and current_user.has_role("administrador")
@@ -292,6 +294,8 @@ def new_post():
             "address": request.form.get("address", "").strip(),
             "province": request.form.get("province", "").strip(),
             "municipality": request.form.get("municipality", "").strip(),
+            "movement_date": request.form.get("movement_date", "").strip(),
+            "movement_time": request.form.get("movement_time", "").strip(),
             "repressor_name": request.form.get("repressor_name", "").strip(),
             "other_type": request.form.get("other_type", "").strip(),
             "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
@@ -318,6 +322,8 @@ def new_post():
                 form_data["address"],
                 form_data["province"],
                 form_data["municipality"],
+                form_data["movement_date"],
+                form_data["movement_time"],
                 form_data["repressor_name"],
                 form_data["other_type"],
             ]
@@ -355,11 +361,25 @@ def new_post():
             except Exception:
                 errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
+        is_urgent = slug in URGENT_CATEGORY_SLUGS
+        movement_at = None
         if slug == "residencia-represor":
             if not form_data["repressor_name"]:
                 errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if not images:
                 errors["images"] = "Debes subir al menos una imagen del represor."
+        if slug == "movimiento-tropas":
+            if not form_data["movement_date"]:
+                errors["movement_date"] = "Debes indicar la fecha del movimiento."
+            if not form_data["movement_time"]:
+                errors["movement_time"] = "Debes indicar la hora del movimiento."
+            if not errors.get("movement_date") and not errors.get("movement_time"):
+                try:
+                    movement_at = datetime.fromisoformat(
+                        f"{form_data['movement_date']}T{form_data['movement_time']}"
+                    )
+                except Exception:
+                    errors["movement_date"] = "Fecha u hora inválida."
         if slug == "otros":
             if not form_data["other_type"]:
                 errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
@@ -455,13 +475,14 @@ def new_post():
             address=form_data["address"] or None,
             province=province or None,
             municipality=municipality or None,
+            movement_at=movement_at,
             repressor_name=form_data["repressor_name"] or None,
             other_type=form_data["other_type"] or None,
             polygon_geojson=form_data["polygon_geojson"] or None,
             links_json=json.dumps(links) if links else None,
             author_id=author_id,
         )
-        post.status = "pending" if moderation_enabled else "approved"
+        post.status = "approved" if is_urgent or not moderation_enabled else "pending"
         db.session.add(post)
         db.session.commit()
 
@@ -484,13 +505,14 @@ def new_post():
             "category": {"name": post.category.name, "slug": post.category.slug},
             "verify_count": post.verify_count or 0,
             "created_at": post.created_at.isoformat(),
+            "movement_at": post.movement_at.isoformat() if post.movement_at else None,
         }
 
         # If submitted from iframe modal, return a script that closes the modal and refreshes map
         if request.args.get("modal") == "1":
             return render_template("map/report_success.html", payload=payload)
 
-        if moderation_enabled:
+        if post.status == "pending":
             flash("Reporte enviado a moderación.", "success")
         else:
             flash("Reporte publicado.", "success")
@@ -614,6 +636,8 @@ def edit_report_public(post_id):
             "address": request.form.get("address", "").strip(),
             "province": request.form.get("province", "").strip(),
             "municipality": request.form.get("municipality", "").strip(),
+            "movement_date": request.form.get("movement_date", "").strip(),
+            "movement_time": request.form.get("movement_time", "").strip(),
             "repressor_name": request.form.get("repressor_name", "").strip(),
             "other_type": request.form.get("other_type", "").strip(),
             "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
@@ -641,6 +665,8 @@ def edit_report_public(post_id):
                 form_data["address"],
                 form_data["province"],
                 form_data["municipality"],
+                form_data["movement_date"],
+                form_data["movement_time"],
                 form_data["repressor_name"],
                 form_data["other_type"],
             ]
@@ -680,12 +706,26 @@ def edit_report_public(post_id):
             except Exception:
                 errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
+        is_urgent = slug in URGENT_CATEGORY_SLUGS
         existing_media_count = len(get_media_payload(post))
+        movement_at = None
         if slug == "residencia-represor":
             if not form_data["repressor_name"]:
                 errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if existing_media_count + len(images) < 1:
                 errors["images"] = "Debes subir al menos una imagen del represor."
+        if slug == "movimiento-tropas":
+            if not form_data["movement_date"]:
+                errors["movement_date"] = "Debes indicar la fecha del movimiento."
+            if not form_data["movement_time"]:
+                errors["movement_time"] = "Debes indicar la hora del movimiento."
+            if not errors.get("movement_date") and not errors.get("movement_time"):
+                try:
+                    movement_at = datetime.fromisoformat(
+                        f"{form_data['movement_date']}T{form_data['movement_time']}"
+                    )
+                except Exception:
+                    errors["movement_date"] = "Fecha u hora inválida."
         if slug == "otros":
             if not form_data["other_type"]:
                 errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
@@ -772,7 +812,7 @@ def edit_report_public(post_id):
                 for idx, url in enumerate(media_urls)
             ]
 
-        if moderation_enabled:
+        if moderation_enabled and not is_urgent:
             combined_media = None
             if media_items:
                 combined_media = get_media_payload(post) + media_items
@@ -788,6 +828,7 @@ def edit_report_public(post_id):
                 address=form_data["address"] or None,
                 province=province or None,
                 municipality=municipality or None,
+                movement_at=movement_at,
                 repressor_name=form_data["repressor_name"] or None,
                 other_type=form_data["other_type"] or None,
                 category_id=int(form_data["category_id"]),
@@ -816,6 +857,7 @@ def edit_report_public(post_id):
             address=post.address,
             province=post.province,
             municipality=post.municipality,
+            movement_at=post.movement_at,
             repressor_name=post.repressor_name,
             other_type=post.other_type,
             category_id=post.category_id,
@@ -833,6 +875,7 @@ def edit_report_public(post_id):
         post.address = form_data["address"] or None
         post.province = province or None
         post.municipality = municipality or None
+        post.movement_at = movement_at
         post.repressor_name = form_data["repressor_name"] or None
         post.other_type = form_data["other_type"] or None
         post.polygon_geojson = form_data["polygon_geojson"] or None

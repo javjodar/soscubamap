@@ -41,6 +41,10 @@ const PLACEHOLDER_BY_SLUG = {
     title: "Ej: Unidad militar",
     description: "Anota el tipo de unidad, accesos, perímetro y presencia visible.",
   },
+  "movimiento-tropas": {
+    title: "Ej: Movimiento de tropas en carretera",
+    description: "Indica fecha y hora del movimiento. Describe tipo de tropas, armamento observado y motivo si se conoce.",
+  },
   "base-espionaje": {
     title: "Ej: Base de espionaje",
     description: "Describe infraestructura, antenas, instalaciones cercanas y evidencia observable.",
@@ -70,8 +74,11 @@ function setupCategoryRequirements() {
   const select = document.getElementById("categorySelect");
   const residenciaFields = document.getElementById("residenciaFields");
   const otrosFields = document.getElementById("otrosFields");
+  const movimientoFields = document.getElementById("movimientoFields");
   const repressorInput = document.getElementById("repressorNameInput");
   const otherInput = document.getElementById("otherTypeInput");
+  const movementDateInput = document.getElementById("movementDateInput");
+  const movementTimeInput = document.getElementById("movementTimeInput");
   const imageInput = document.querySelector('input[name="images"]');
   const status = document.getElementById("imageStatus");
   const form = document.querySelector(".form-grid");
@@ -81,11 +88,15 @@ function setupCategoryRequirements() {
     const slug = selected?.dataset?.slug || "";
     const isResidencia = slug === "residencia-represor";
     const isOtros = slug === "otros";
+    const isMovimiento = slug === "movimiento-tropas";
 
     if (residenciaFields) residenciaFields.classList.toggle("is-hidden", !isResidencia);
     if (otrosFields) otrosFields.classList.toggle("is-hidden", !isOtros);
+    if (movimientoFields) movimientoFields.classList.toggle("is-hidden", !isMovimiento);
     if (repressorInput) repressorInput.required = isResidencia;
     if (otherInput) otherInput.required = isOtros;
+    if (movementDateInput) movementDateInput.required = isMovimiento;
+    if (movementTimeInput) movementTimeInput.required = isMovimiento;
   };
 
   if (select) {
@@ -112,6 +123,16 @@ function setupCategoryRequirements() {
           if (otherInput) otherInput.focus();
           if (status) {
             status.textContent = "El tipo en “Otros” no puede referirse a represores. Usa la categoría correspondiente.";
+          }
+        }
+      }
+      if (slug === "movimiento-tropas") {
+        const hasDate = movementDateInput && movementDateInput.value;
+        const hasTime = movementTimeInput && movementTimeInput.value;
+        if (!hasDate || !hasTime) {
+          e.preventDefault();
+          if (status) {
+            status.textContent = "Debes indicar fecha y hora del movimiento.";
           }
         }
       }

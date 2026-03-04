@@ -65,6 +65,16 @@
   </section>
 {% endif %}
 
+<section class="alert-console">
+  <div class="console-header">
+    <div class="console-title">Movimientos y acciones represivas</div>
+    <div class="console-status">En vivo</div>
+  </div>
+  <div id="alertFeed" class="console-body">
+    <div class="console-empty">Sin movimientos o acciones recientes.</div>
+  </div>
+</section>
+
 <section class="map-wrap">
   <div
     id="map"
@@ -84,12 +94,13 @@
 </section>
 
 <section class="legend">
+  {% set alert_slugs = ["accion-represiva", "movimiento-tropas"] %}
   <div class="legend-header">
     <div class="legend-title">Leyenda de íconos</div>
   </div>
   <div class="legend-grid">
     {% for cat in categories %}
-      <div class="legend-item" data-slug="{{ cat.slug }}">
+      <div class="legend-item{% if cat.slug in alert_slugs %} alert{% endif %}" data-slug="{{ cat.slug }}">
         <span class="legend-icon">
           <i class="fa-solid fa-location-dot"></i>
         </span>

@@ -13,6 +13,9 @@
       {% if post.category.slug == 'otros' and post.other_type %}
         <div class="muted">Tipo: {{ post.other_type }}</div>
       {% endif %}
+      {% if post.movement_at %}
+        <div class="muted">Movimiento reportado: {{ post.movement_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      {% endif %}
       <div class="muted">{{ anon_label }}</div>
       <div class="muted">{{ post.created_at }}</div>
       {% if post.address %}<div class="muted">Dirección: {{ post.address }}</div>{% endif %}

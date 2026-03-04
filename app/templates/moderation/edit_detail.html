@@ -26,6 +26,9 @@
       {% if edit.province or edit.municipality %}
         <div class="muted">Provincia: {{ edit.province or 'N/D' }} · Municipio: {{ edit.municipality or 'N/D' }}</div>
       {% endif %}
+      {% if edit.movement_at %}
+        <div class="muted">Movimiento: {{ edit.movement_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      {% endif %}
       <div class="muted">{{ edit.latitude }}, {{ edit.longitude }}</div>
       <p>{{ edit.description }}</p>
 

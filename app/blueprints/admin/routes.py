@@ -20,6 +20,7 @@ from app.services.category_rules import is_other_type_allowed
 from app.services.geo_lookup import lookup_location, list_provinces, municipalities_map
 from flask_login import current_user
 import json
+from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import func
 from app.services.markdown_utils import render_markdown
@@ -231,6 +232,8 @@ def edit_report(post_id):
             "address": request.form.get("address", "").strip(),
             "province": request.form.get("province", "").strip(),
             "municipality": request.form.get("municipality", "").strip(),
+            "movement_date": request.form.get("movement_date", "").strip(),
+            "movement_time": request.form.get("movement_time", "").strip(),
             "repressor_name": request.form.get("repressor_name", "").strip(),
             "other_type": request.form.get("other_type", "").strip(),
             "polygon_geojson": request.form.get("polygon_geojson", "").strip(),
@@ -247,6 +250,8 @@ def edit_report(post_id):
                 form_data["address"],
                 form_data["province"],
                 form_data["municipality"],
+                form_data["movement_date"],
+                form_data["movement_time"],
                 form_data["repressor_name"],
                 form_data["other_type"],
             ]
@@ -309,11 +314,24 @@ def edit_report(post_id):
                 errors["category_id"] = "Selecciona una categoría válida."
         slug = category.slug if category else ""
         existing_media_count = len(get_media_payload(post))
+        movement_at = None
         if slug == "residencia-represor":
             if not form_data["repressor_name"]:
                 errors["repressor_name"] = "Debes indicar el nombre o apodo del represor."
             if existing_media_count < 1:
                 errors["images"] = "Debes subir al menos una imagen del represor."
+        if slug == "movimiento-tropas":
+            if not form_data["movement_date"]:
+                errors["movement_date"] = "Debes indicar la fecha del movimiento."
+            if not form_data["movement_time"]:
+                errors["movement_time"] = "Debes indicar la hora del movimiento."
+            if not errors.get("movement_date") and not errors.get("movement_time"):
+                try:
+                    movement_at = datetime.fromisoformat(
+                        f"{form_data['movement_date']}T{form_data['movement_time']}"
+                    )
+                except Exception:
+                    errors["movement_date"] = "Fecha u hora inválida."
         if slug == "otros":
             if not form_data["other_type"]:
                 errors["other_type"] = "Debes especificar el tipo en la categoría Otros."
@@ -358,6 +376,7 @@ def edit_report(post_id):
                 address=form_data["address"] or None,
                 province=province or None,
                 municipality=municipality or None,
+                movement_at=movement_at,
                 repressor_name=form_data["repressor_name"] or None,
                 other_type=form_data["other_type"] or None,
                 category_id=int(form_data["category_id"]),
@@ -382,6 +401,7 @@ def edit_report(post_id):
             address=post.address,
             province=post.province,
             municipality=post.municipality,
+            movement_at=post.movement_at,
             repressor_name=post.repressor_name,
             other_type=post.other_type,
             category_id=post.category_id,
@@ -399,6 +419,7 @@ def edit_report(post_id):
         post.address = form_data["address"] or None
         post.province = province or None
         post.municipality = municipality or None
+        post.movement_at = movement_at
         post.repressor_name = form_data["repressor_name"] or None
         post.other_type = form_data["other_type"] or None
         post.polygon_geojson = form_data["polygon_geojson"] or None
@@ -446,6 +467,7 @@ def restore_revision(post_id, revision_id):
         address=post.address,
         province=post.province,
         municipality=post.municipality,
+        movement_at=post.movement_at,
         category_id=post.category_id,
         polygon_geojson=post.polygon_geojson,
         links_json=post.links_json,
@@ -460,6 +482,7 @@ def restore_revision(post_id, revision_id):
     post.address = revision.address
     post.province = revision.province
     post.municipality = revision.municipality
+    post.movement_at = revision.movement_at
     if revision.category_id:
         post.category_id = revision.category_id
     post.polygon_geojson = revision.polygon_geojson
