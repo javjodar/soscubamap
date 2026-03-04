@@ -270,9 +270,10 @@ def analytics_v1():
     if province:
         base_query = base_query.filter(Post.province == province)
 
+    day_expr = func.date(Post.created_at).label("day")
     reports_over_time = (
         db.session.query(
-            func.date_trunc("day", Post.created_at).label("day"),
+            day_expr,
             func.count(Post.id),
         )
         .filter(
@@ -280,8 +281,8 @@ def analytics_v1():
             Post.created_at <= end_dt,
             Post.status.in_(active_statuses),
         )
-        .group_by(func.date_trunc("day", Post.created_at))
-        .order_by(func.date_trunc("day", Post.created_at))
+        .group_by(day_expr)
+        .order_by(day_expr)
     )
     if category_id:
         try:
@@ -292,7 +293,7 @@ def analytics_v1():
         reports_over_time = reports_over_time.filter(Post.province == province)
 
     reports_series = [
-        {"date": row[0].date().isoformat(), "count": row[1]}
+        {"date": row[0].isoformat(), "count": row[1]}
         for row in reports_over_time.all()
     ]
 
@@ -400,31 +401,33 @@ def analytics_v1():
         for p in top_verified.limit(10).all()
     ]
 
+    comment_day = func.date(Comment.created_at).label("day")
     comment_query = (
         db.session.query(
-            func.date_trunc("day", Comment.created_at).label("day"),
+            comment_day,
             func.count(Comment.id),
         )
         .filter(Comment.created_at >= start_dt, Comment.created_at <= end_dt)
-        .group_by(func.date_trunc("day", Comment.created_at))
-        .order_by(func.date_trunc("day", Comment.created_at))
+        .group_by(comment_day)
+        .order_by(comment_day)
     )
+    discussion_day = func.date(DiscussionComment.created_at).label("day")
     discussion_comment_query = (
         db.session.query(
-            func.date_trunc("day", DiscussionComment.created_at).label("day"),
+            discussion_day,
             func.count(DiscussionComment.id),
         )
         .filter(
             DiscussionComment.created_at >= start_dt,
             DiscussionComment.created_at <= end_dt,
         )
-        .group_by(func.date_trunc("day", DiscussionComment.created_at))
-        .order_by(func.date_trunc("day", DiscussionComment.created_at))
+        .group_by(discussion_day)
+        .order_by(discussion_day)
     )
 
-    report_comments = {row[0].date().isoformat(): row[1] for row in comment_query.all()}
+    report_comments = {row[0].isoformat(): row[1] for row in comment_query.all()}
     discussion_comments = {
-        row[0].date().isoformat(): row[1] for row in discussion_comment_query.all()
+        row[0].isoformat(): row[1] for row in discussion_comment_query.all()
     }
     labels = sorted(set(report_comments.keys()) | set(discussion_comments.keys()))
     report_counts = [report_comments.get(label, 0) for label in labels]
