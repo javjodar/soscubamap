@@ -2036,6 +2036,44 @@ textarea {
   color: var(--muted);
 }
 
+.export-page {
+  display: grid;
+  gap: 24px;
+  color: var(--text);
+}
+
+.export-hero {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 18px 30px var(--shadow);
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.export-actions a {
+  text-decoration: none;
+}
+
+.export-notes {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 18px 30px var(--shadow);
+}
+
+.export-notes a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .site-header {
     flex-direction: column;

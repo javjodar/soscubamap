@@ -1,0 +1,30 @@
+{% extends "shared/base.html" %}
+
+{% block title %} · Exportar{% endblock %}
+
+{% block content %}
+<section class="export-page">
+  <div class="export-hero">
+    <h1>Exportar reportes</h1>
+    <p>
+      Descarga los reportes públicos en distintos formatos.
+      La exportación incluye solo reportes aprobados.
+    </p>
+  </div>
+
+  <div class="export-actions">
+    <a class="btn-primary" href="{{ url_for('map.export_download') }}?format=csv">Descargar CSV</a>
+    <a class="btn-secondary" href="{{ url_for('map.export_download') }}?format=xls">Descargar XLS</a>
+    <a class="btn-secondary" href="{{ url_for('map.export_download') }}?format=txt">Descargar TXT</a>
+    <a class="btn-secondary" href="{{ url_for('map.export_download') }}?format=pdf">Descargar PDF</a>
+  </div>
+
+  <div class="export-notes">
+    <h2>Notas</h2>
+    <ul>
+      <li>Los archivos se generan en tiempo real con los datos visibles.</li>
+      <li>Para acceso de escritura, contáctanos en <a href="mailto:soscubamap@proton.me">soscubamap@proton.me</a>.</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

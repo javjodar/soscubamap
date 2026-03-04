@@ -1,8 +1,13 @@
 from decimal import Decimal
 import secrets
 import json
-from flask import render_template, current_app, redirect, url_for, request, flash, abort, session
+import csv
+import io
+import html
+from datetime import datetime
+from flask import render_template, current_app, redirect, url_for, request, flash, abort, session, make_response
 from flask_login import current_user
+from sqlalchemy.orm import selectinload
 
 from app.models.category import Category
 from app.models.post import Post
@@ -91,6 +96,164 @@ def dashboard():
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
     )
+
+
+def _export_columns():
+    return [
+        ("id", "ID"),
+        ("title", "Título"),
+        ("description", "Descripción"),
+        ("category", "Categoría"),
+        ("province", "Provincia"),
+        ("municipality", "Municipio"),
+        ("latitude", "Latitud"),
+        ("longitude", "Longitud"),
+        ("address", "Dirección"),
+        ("repressor_name", "Represor"),
+        ("other_type", "Tipo (Otros)"),
+        ("verify_count", "Verificaciones"),
+        ("links", "Enlaces"),
+        ("created_at", "Creado"),
+        ("updated_at", "Actualizado"),
+    ]
+
+
+def _serialize_export_row(post):
+    links = []
+    if post.links_json:
+        try:
+            links = json.loads(post.links_json) or []
+        except Exception:
+            links = []
+    return {
+        "id": post.id,
+        "title": post.title,
+        "description": post.description,
+        "category": post.category.name if post.category else "",
+        "province": post.province or "",
+        "municipality": post.municipality or "",
+        "latitude": str(post.latitude) if post.latitude is not None else "",
+        "longitude": str(post.longitude) if post.longitude is not None else "",
+        "address": post.address or "",
+        "repressor_name": post.repressor_name or "",
+        "other_type": post.other_type or "",
+        "verify_count": post.verify_count or 0,
+        "links": ", ".join(links),
+        "created_at": post.created_at.isoformat() if post.created_at else "",
+        "updated_at": post.updated_at.isoformat() if post.updated_at else "",
+    }
+
+
+def _load_export_posts():
+    return (
+        Post.query.options(selectinload(Post.category))
+        .filter_by(status="approved")
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+
+@map_bp.route("/exportar")
+def export_data():
+    return render_template("map/export.html")
+
+
+@map_bp.route("/exportar/descargar")
+def export_download():
+    fmt = (request.args.get("format") or "csv").lower()
+    if fmt not in {"csv", "xls", "txt", "pdf"}:
+        abort(400)
+
+    columns = _export_columns()
+    posts = _load_export_posts()
+    rows = [_serialize_export_row(post) for post in posts]
+    filename = f"soscubamap_reportes_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.{fmt}"
+
+    if fmt in {"csv", "txt"}:
+        output = io.StringIO()
+        delimiter = "," if fmt == "csv" else "\t"
+        writer = csv.writer(output, delimiter=delimiter)
+        writer.writerow([label for _, label in columns])
+        for row in rows:
+            writer.writerow([row[key] for key, _ in columns])
+        resp = make_response(output.getvalue())
+        mime = "text/csv" if fmt == "csv" else "text/plain"
+        resp.headers["Content-Type"] = f"{mime}; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    if fmt == "xls":
+        header_cells = "".join(
+            f"<th>{html.escape(label)}</th>" for _, label in columns
+        )
+        body_rows = []
+        for row in rows:
+            cells = "".join(
+                f"<td>{html.escape(str(row[key] if row[key] is not None else ''))}</td>"
+                for key, _ in columns
+            )
+            body_rows.append(f"<tr>{cells}</tr>")
+        table_html = (
+            "<table border=\"1\">"
+            f"<thead><tr>{header_cells}</tr></thead>"
+            f"<tbody>{''.join(body_rows)}</tbody>"
+            "</table>"
+        )
+        html_doc = (
+            "<!doctype html><html><head><meta charset=\"utf-8\"></head>"
+            f"<body>{table_html}</body></html>"
+        )
+        resp = make_response(html_doc)
+        resp.headers["Content-Type"] = "application/vnd.ms-excel; charset=utf-8"
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    # PDF
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    except Exception:
+        resp = make_response("PDF no disponible en el servidor.", 501)
+        resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+        return resp
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=24, rightMargin=24, topMargin=24, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("SOSCuba Map · Exportación de reportes", styles["Title"]),
+        Spacer(1, 12),
+        Paragraph("Fuente: reportes aprobados", styles["Normal"]),
+        Spacer(1, 12),
+    ]
+
+    data = [[label for _, label in columns]]
+    for row in rows:
+        data.append([str(row[key]) for key, _ in columns])
+
+    table = Table(data, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f151a")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#2a3b4a")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(table)
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    resp = make_response(pdf_bytes)
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
 
 
 @map_bp.route("/api-docs")

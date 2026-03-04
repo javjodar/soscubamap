@@ -11,3 +11,4 @@ gunicorn==22.0.0
 cloudinary==1.41.0
 markdown==3.6
 bleach==6.1.0
+reportlab==4.1.0
