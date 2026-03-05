@@ -14,7 +14,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favico.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favico.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v={{ config.ASSET_VERSION }}" />
     {% block head_extra %}{% endblock %}
     <link
       rel="stylesheet"

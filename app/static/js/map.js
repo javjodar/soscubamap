@@ -540,12 +540,12 @@ async function applyFilters() {
 }
 
 async function loadRecent() {
-  const res = await fetch("/api/posts?limit=8");
+  const res = await fetch("/api/posts?limit=8", { cache: "no-store" });
   return await res.json();
 }
 
 async function loadAlerts() {
-  const res = await fetch("/api/posts?limit=40");
+  const res = await fetch("/api/posts?limit=40", { cache: "no-store" });
   return await res.json();
 }
 
@@ -848,6 +848,22 @@ window.initMap = async function () {
     refreshAlerts();
   }, 8000);
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+  const alertFeed = document.getElementById("alertFeed");
+  const recentFeed = document.getElementById("recentFeed");
+  if (!alertFeed && !recentFeed) return;
+
+  refreshRecent();
+  refreshAlerts();
+
+  if (!recentTimer) {
+    recentTimer = setInterval(() => {
+      refreshRecent();
+      refreshAlerts();
+    }, 8000);
+  }
+});
 
 function focusSearchResult(geometry, label) {
   if (geometry.viewport) {

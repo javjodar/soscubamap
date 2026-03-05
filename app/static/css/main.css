@@ -407,6 +407,13 @@ h3 {
   max-height: 140px;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.alert-console .console-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .alert-console .console-empty {
@@ -1392,16 +1399,21 @@ button[data-loading="true"]::after {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .panel * {
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .panel img,
 .panel video,
 .panel iframe,
-.panel canvas {
+.panel canvas,
+.panel svg {
   max-width: 100%;
   height: auto;
 }
@@ -1410,6 +1422,7 @@ button[data-loading="true"]::after {
 .panel textarea,
 .panel select {
   max-width: 100%;
+  width: 100%;
 }
 
 .panel.notice {
