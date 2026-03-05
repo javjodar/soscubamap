@@ -4,6 +4,7 @@ import json
 import secrets
 import hashlib
 from datetime import datetime, timedelta
+from sqlalchemy.exc import IntegrityError
 from flask_login import current_user
 
 from app.extensions import db, limiter
@@ -582,11 +583,29 @@ def _get_or_create_anon_user():
 def verify_post(post_id):
     post = Post.query.get_or_404(post_id)
     cookie_key = f"verified_{post_id}"
-    if request.cookies.get(cookie_key):
+    voter_hash = _vote_identity_hash()
+
+    existing = VoteRecord.query.filter_by(
+        target_type="post_verify",
+        target_id=post.id,
+        voter_hash=voter_hash,
+    ).first()
+    if existing or request.cookies.get(cookie_key):
         return jsonify({"ok": False, "verify_count": post.verify_count or 0})
 
+    record = VoteRecord(
+        target_type="post_verify",
+        target_id=post.id,
+        voter_hash=voter_hash,
+        value=1,
+    )
+    db.session.add(record)
     post.verify_count = (post.verify_count or 0) + 1
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"ok": False, "verify_count": post.verify_count or 0})
 
     resp = make_response(jsonify({"ok": True, "verify_count": post.verify_count}))
     resp.set_cookie(cookie_key, "1")

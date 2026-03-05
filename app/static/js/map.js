@@ -700,6 +700,7 @@ window.initMap = async function () {
     tilt: 0,
     heading: 0,
     rotateControl: true,
+    fullscreenControl: true,
     gestureHandling: "greedy",
     zoomControl: true,
     scrollwheel: true,
