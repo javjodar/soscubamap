@@ -271,16 +271,10 @@ h3 {
   touch-action: pan-x pan-y pinch-zoom;
 }
 
-.map-search-bar {
+.map-search-wrap {
   margin: 0 0 12px;
-  padding: 10px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(110, 231, 183, 0.35);
-  background: rgba(9, 14, 18, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: grid;
-  gap: 8px;
+  gap: 6px;
   width: 60%;
 }
 
@@ -289,6 +283,16 @@ h3 {
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.map-search-bar {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  background: rgba(9, 14, 18, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
 }
 
 .map-search-bar input {
