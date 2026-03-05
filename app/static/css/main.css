@@ -273,9 +273,10 @@ h3 {
 
 .map-search-wrap {
   margin: 0 0 12px;
-  display: grid;
-  gap: 6px;
-  width: 60%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 .map-search-label {
@@ -283,9 +284,11 @@ h3 {
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .map-search-bar {
+  flex: 1 1 auto;
   padding: 10px 16px;
   border-radius: 10px;
   border: 1px solid rgba(110, 231, 183, 0.35);
