@@ -43,7 +43,9 @@
           <button class="btn-secondary" type="submit">Rechazar</button>
         </form>
       {% endif %}
-      <button class="btn-primary" id="verifyBtn">Verificar</button>
+      <button class="btn-primary" id="verifyBtn" data-verified="{{ 1 if verified_by_me else 0 }}" {% if verified_by_me %}disabled{% endif %}>
+        {% if verified_by_me %}Verificado{% else %}Verificar{% endif %}
+      </button>
       <span class="verify-count" id="verifyCount">{{ post.verify_count or 0 }}</span>
       <button class="btn-secondary" id="copyLinkBtn">Copiar enlace</button>
       <a class="btn-secondary" href="{{ url_for('map.post_history', post_id=post.id) }}">Historial</a>

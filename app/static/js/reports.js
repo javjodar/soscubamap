@@ -87,10 +87,20 @@ async function initReportCard(card) {
   const verifyBtn = card.querySelector(".verify-btn");
   const verifyCount = document.getElementById(`verify-count-${postId}`);
   if (verifyBtn) {
+    if (verifyBtn.getAttribute("data-verified") === "1") {
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Verificado";
+    }
     verifyBtn.addEventListener("click", async () => {
+      if (verifyBtn.disabled) return;
       const result = await verifyPost(postId);
       if (verifyCount && result && typeof result.verify_count !== "undefined") {
         verifyCount.textContent = result.verify_count;
+      }
+      if (result && result.ok) {
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Verificado";
+        verifyBtn.setAttribute("data-verified", "1");
       }
     });
   }

@@ -2,7 +2,6 @@ from flask import jsonify, request, make_response, session, current_app
 import math
 import json
 import secrets
-import hashlib
 from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 from flask_login import current_user
@@ -30,6 +29,7 @@ from app.models.discussion_post import DiscussionPost
 from app.models.discussion_comment import DiscussionComment
 from app.models.push_subscription import PushSubscription
 from app.models.vote_record import VoteRecord
+from app.services.vote_identity import get_voter_hash
 
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
@@ -69,17 +69,6 @@ def _push_enabled() -> bool:
     )
 
 
-def _vote_identity_hash() -> str:
-    if current_user.is_authenticated:
-        raw = f"user:{current_user.id}"
-    else:
-        ip = request.headers.get("CF-Connecting-IP") or request.remote_addr or ""
-        ua = request.headers.get("User-Agent", "")
-        raw = f"anon:{ip}|{ua}"
-    secret = current_app.config.get("SECRET_KEY", "")
-    return hashlib.sha256(f"{secret}:{raw}".encode("utf-8")).hexdigest()
-
-
 def _apply_vote(record, value):
     if value == 1:
         record.upvotes = (record.upvotes or 0) + 1
@@ -92,6 +81,20 @@ def _remove_vote(record, value):
         record.upvotes = max((record.upvotes or 0) - 1, 0)
     else:
         record.downvotes = max((record.downvotes or 0) - 1, 0)
+
+
+def _get_verified_post_ids(post_ids):
+    if not post_ids:
+        return set()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
+    if not voter_hash:
+        return set()
+    rows = (
+        VoteRecord.query.filter_by(target_type="post_verify", voter_hash=voter_hash)
+        .filter(VoteRecord.target_id.in_(post_ids))
+        .all()
+    )
+    return {row.target_id for row in rows}
 
 
 @api_bp.route("/health")
@@ -180,6 +183,7 @@ def posts():
             pass
 
     items = query.all()
+    verified_ids = _get_verified_post_ids([p.id for p in items])
     return jsonify(
         [
             {
@@ -200,6 +204,7 @@ def posts():
                 "links": json.loads(p.links_json) if p.links_json else [],
                 "media": get_media_payload(p)[:4],
                 "verify_count": p.verify_count or 0,
+                "verified_by_me": p.id in verified_ids,
                 "category": {
                     "id": p.category.id,
                     "name": p.category.name,
@@ -583,7 +588,7 @@ def _get_or_create_anon_user():
 def verify_post(post_id):
     post = Post.query.get_or_404(post_id)
     cookie_key = f"verified_{post_id}"
-    voter_hash = _vote_identity_hash()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
 
     existing = VoteRecord.query.filter_by(
         target_type="post_verify",
@@ -664,7 +669,7 @@ def vote_comment(comment_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    voter_hash = _vote_identity_hash()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
     existing = VoteRecord.query.filter_by(
         target_type="comment",
         target_id=comment.id,
@@ -740,7 +745,7 @@ def vote_discussion_post(post_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    voter_hash = _vote_identity_hash()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
     existing = VoteRecord.query.filter_by(
         target_type="discussion_post",
         target_id=post.id,
@@ -791,7 +796,7 @@ def vote_discussion_comment(comment_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    voter_hash = _vote_identity_hash()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
     existing = VoteRecord.query.filter_by(
         target_type="discussion_comment",
         target_id=comment.id,

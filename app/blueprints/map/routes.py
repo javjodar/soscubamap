@@ -19,6 +19,7 @@ from app.models.location_report import LocationReport
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.media import Media
+from app.models.vote_record import VoteRecord
 from app.services.geo_lookup import lookup_location, list_provinces, list_municipalities, municipalities_map
 from app.services.media_upload import (
     media_json_from_post,
@@ -33,6 +34,7 @@ from app.services.content_quality import validate_title, validate_description
 from app.services.category_rules import is_other_type_allowed
 from app.services.category_sort import sort_categories_for_forms
 from app.services.push_notifications import send_alert_notification, push_enabled
+from app.services.vote_identity import get_voter_hash
 from app.extensions import db, limiter
 from . import map_bp
 
@@ -65,6 +67,20 @@ def _get_chat_session_id():
     sid = secrets.token_hex(16)
     session["chat_sid"] = sid
     return sid
+
+
+def _get_verified_post_ids(post_ids):
+    if not post_ids:
+        return set()
+    voter_hash = get_voter_hash(current_user, request, current_app.config.get("SECRET_KEY", ""))
+    if not voter_hash:
+        return set()
+    rows = (
+        VoteRecord.query.filter_by(target_type="post_verify", voter_hash=voter_hash)
+        .filter(VoteRecord.target_id.in_(post_ids))
+        .all()
+    )
+    return {row.target_id for row in rows}
 
 
 def _resolve_geo_location(lat, lng, province, municipality):
@@ -963,6 +979,7 @@ def report_detail(post_id):
     moderation_enabled = True
     if moderation_setting:
         moderation_enabled = moderation_setting.value == "true"
+    verified_by_me = post.id in _get_verified_post_ids([post.id])
     return render_template(
         "map/report_detail.html",
         post=post,
@@ -972,6 +989,7 @@ def report_detail(post_id):
         moderation_enabled=moderation_enabled,
         edit_locked=_is_edit_locked(post),
         recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+        verified_by_me=verified_by_me,
     )
 
 
@@ -1050,6 +1068,7 @@ def reports():
         query = query.filter_by(municipality=selected_municipality)
 
     posts = query.order_by(Post.created_at.desc()).all()
+    verified_ids = _get_verified_post_ids([post.id for post in posts])
 
     provinces = list_provinces()
     if selected_province:
@@ -1060,6 +1079,7 @@ def reports():
     return render_template(
         "map/reports.html",
         posts=posts,
+        verified_ids=verified_ids,
         provinces=provinces,
         municipalities=municipalities,
         selected_province=selected_province,

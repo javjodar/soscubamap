@@ -127,10 +127,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const hideBtn = document.getElementById("hideReportBtn");
   const deleteBtn = document.getElementById("deleteReportBtn");
   if (verifyBtn) {
+    if (verifyBtn.getAttribute("data-verified") === "1") {
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Verificado";
+    }
     verifyBtn.addEventListener("click", async () => {
+      if (verifyBtn.disabled) return;
       const result = await verifyPost(postId);
       if (verifyCount && result && typeof result.verify_count !== "undefined") {
         verifyCount.textContent = result.verify_count;
+      }
+      if (result && result.ok) {
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Verificado";
+        verifyBtn.setAttribute("data-verified", "1");
       }
     });
   }

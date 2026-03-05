@@ -1351,6 +1351,20 @@ button[data-loading="true"]::after {
   font-weight: 700;
 }
 
+.info-btn.is-verified {
+  background: rgba(110, 231, 183, 0.2);
+  border: 1px solid rgba(110, 231, 183, 0.5);
+  color: #9ef5cc;
+}
+
+button:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.info-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .info-badge {
   display: inline-flex;
   align-items: center;

@@ -208,6 +208,9 @@ function renderMarkers(posts) {
         </div>`
       : "";
     const editLocked = !isAdmin && (post.verify_count ?? 0) >= 10;
+    const verifiedByMe = !!post.verified_by_me;
+    const verifyLabel = verifiedByMe ? "Verificado" : "Verificar";
+    const verifyDisabled = verifiedByMe ? "disabled data-verified=\"1\"" : "";
     const info = new google.maps.InfoWindow({
       content: `
         <div style="color:#111;max-width:260px;">
@@ -236,7 +239,7 @@ function renderMarkers(posts) {
             <button id="copyLinkBtn-${post.id}" data-copy-url="/reporte/${post.id}" class="info-btn info-btn-outline">Copiar enlace</button>
             <button id="reportLocationBtn" data-report-url="/reportar-ubicacion/${post.id}" class="info-btn info-btn-outline">Reportar ubicación</button>
             <button id="viewHistoryBtn" data-history-url="/reporte/${post.id}/historial" class="info-btn info-btn-outline info-btn-blue">Ver historial</button>
-            <button id="verifyBtn-${post.id}" data-verify-id="${post.id}" class="info-btn info-btn-solid">Verificar</button>
+            <button id="verifyBtn-${post.id}" data-verify-id="${post.id}" class="info-btn info-btn-solid ${verifiedByMe ? "is-verified" : ""}" ${verifyDisabled}>${verifyLabel}</button>
             <span id="verifyCount-${post.id}" class="info-badge">${post.verify_count ?? 0}</span>
             ${
               editLocked
@@ -320,11 +323,18 @@ function renderMarkers(posts) {
       const verifyBtn = document.getElementById(`verifyBtn-${post.id}`);
       if (verifyBtn) {
         verifyBtn.addEventListener("click", async () => {
+          if (verifyBtn.disabled) return;
           const res = await fetch(`/api/posts/${post.id}/verify`, { method: "POST" });
           const data = await res.json();
           const countEl = document.getElementById(`verifyCount-${post.id}`);
           if (countEl && typeof data.verify_count !== "undefined") {
             countEl.textContent = data.verify_count;
+          }
+          if (data && data.ok) {
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = "Verificado";
+            verifyBtn.classList.add("is-verified");
+            verifyBtn.setAttribute("data-verified", "1");
           }
         });
       }
