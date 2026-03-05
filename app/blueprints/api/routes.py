@@ -2,6 +2,7 @@ from flask import jsonify, request, make_response, session, current_app
 import math
 import json
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 from flask_login import current_user
 
@@ -27,6 +28,7 @@ from app.models.chat_presence import ChatPresence
 from app.models.discussion_post import DiscussionPost
 from app.models.discussion_comment import DiscussionComment
 from app.models.push_subscription import PushSubscription
+from app.models.vote_record import VoteRecord
 
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
@@ -64,6 +66,31 @@ def _push_enabled() -> bool:
         current_app.config.get("VAPID_PUBLIC_KEY")
         and current_app.config.get("VAPID_PRIVATE_KEY")
     )
+
+
+def _vote_identity_hash() -> str:
+    if current_user.is_authenticated:
+        raw = f"user:{current_user.id}"
+    else:
+        ip = request.headers.get("CF-Connecting-IP") or request.remote_addr or ""
+        ua = request.headers.get("User-Agent", "")
+        raw = f"anon:{ip}|{ua}"
+    secret = current_app.config.get("SECRET_KEY", "")
+    return hashlib.sha256(f"{secret}:{raw}".encode("utf-8")).hexdigest()
+
+
+def _apply_vote(record, value):
+    if value == 1:
+        record.upvotes = (record.upvotes or 0) + 1
+    else:
+        record.downvotes = (record.downvotes or 0) + 1
+
+
+def _remove_vote(record, value):
+    if value == 1:
+        record.upvotes = max((record.upvotes or 0) - 1, 0)
+    else:
+        record.downvotes = max((record.downvotes or 0) - 1, 0)
 
 
 @api_bp.route("/health")
@@ -610,7 +637,7 @@ def comments(post_id):
 
 
 @api_bp.route("/comments/<int:comment_id>/vote", methods=["POST"])
-@limiter.limit("30/minute; 500/day")
+@limiter.limit("10/minute; 200/day")
 def vote_comment(comment_id):
     comment = Comment.query.get_or_404(comment_id)
     data = request.get_json(silent=True) or {}
@@ -618,39 +645,15 @@ def vote_comment(comment_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    cookie_key = f"comment_vote_{comment_id}"
-    prev = request.cookies.get(cookie_key)
-    prev_val = None
-    if prev in ("1", "-1"):
-        prev_val = int(prev)
+    voter_hash = _vote_identity_hash()
+    existing = VoteRecord.query.filter_by(
+        target_type="comment",
+        target_id=comment.id,
+        voter_hash=voter_hash,
+    ).first()
 
-    if prev_val == value:
-        resp = make_response(
-            jsonify(
-                {
-                    "ok": True,
-                    "upvotes": comment.upvotes or 0,
-                    "downvotes": comment.downvotes or 0,
-                    "score": (comment.upvotes or 0) - (comment.downvotes or 0),
-                }
-            )
-        )
-        resp.set_cookie(cookie_key, str(value))
-        return resp
-
-    if prev_val == 1:
-        comment.upvotes = max((comment.upvotes or 0) - 1, 0)
-    elif prev_val == -1:
-        comment.downvotes = max((comment.downvotes or 0) - 1, 0)
-
-    if value == 1:
-        comment.upvotes = (comment.upvotes or 0) + 1
-    else:
-        comment.downvotes = (comment.downvotes or 0) + 1
-    db.session.commit()
-
-    resp = make_response(
-        jsonify(
+    if existing and existing.value == value:
+        return jsonify(
             {
                 "ok": True,
                 "upvotes": comment.upvotes or 0,
@@ -658,9 +661,30 @@ def vote_comment(comment_id):
                 "score": (comment.upvotes or 0) - (comment.downvotes or 0),
             }
         )
+
+    if existing:
+        _remove_vote(comment, existing.value)
+        existing.value = value
+    else:
+        existing = VoteRecord(
+            target_type="comment",
+            target_id=comment.id,
+            voter_hash=voter_hash,
+            value=value,
+        )
+        db.session.add(existing)
+
+    _apply_vote(comment, value)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "upvotes": comment.upvotes or 0,
+            "downvotes": comment.downvotes or 0,
+            "score": (comment.upvotes or 0) - (comment.downvotes or 0),
+        }
     )
-    resp.set_cookie(cookie_key, str(value))
-    return resp
 
 
 @api_bp.route("/comments/<int:comment_id>", methods=["DELETE"])
@@ -689,6 +713,7 @@ def update_post_status(post_id):
 
 
 @api_bp.route("/discusiones/<int:post_id>/vote", methods=["POST"])
+@limiter.limit("12/minute; 240/day")
 def vote_discussion_post(post_id):
     post = DiscussionPost.query.get_or_404(post_id)
     data = request.get_json(silent=True) or {}
@@ -696,39 +721,15 @@ def vote_discussion_post(post_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    cookie_key = f"discussion_post_vote_{post_id}"
-    prev = request.cookies.get(cookie_key)
-    prev_val = None
-    if prev in ("1", "-1"):
-        prev_val = int(prev)
+    voter_hash = _vote_identity_hash()
+    existing = VoteRecord.query.filter_by(
+        target_type="discussion_post",
+        target_id=post.id,
+        voter_hash=voter_hash,
+    ).first()
 
-    if prev_val == value:
-        resp = make_response(
-            jsonify(
-                {
-                    "ok": True,
-                    "upvotes": post.upvotes or 0,
-                    "downvotes": post.downvotes or 0,
-                    "score": (post.upvotes or 0) - (post.downvotes or 0),
-                }
-            )
-        )
-        resp.set_cookie(cookie_key, str(value))
-        return resp
-
-    if prev_val == 1:
-        post.upvotes = max((post.upvotes or 0) - 1, 0)
-    elif prev_val == -1:
-        post.downvotes = max((post.downvotes or 0) - 1, 0)
-
-    if value == 1:
-        post.upvotes = (post.upvotes or 0) + 1
-    else:
-        post.downvotes = (post.downvotes or 0) + 1
-    db.session.commit()
-
-    resp = make_response(
-        jsonify(
+    if existing and existing.value == value:
+        return jsonify(
             {
                 "ok": True,
                 "upvotes": post.upvotes or 0,
@@ -736,13 +737,34 @@ def vote_discussion_post(post_id):
                 "score": (post.upvotes or 0) - (post.downvotes or 0),
             }
         )
+
+    if existing:
+        _remove_vote(post, existing.value)
+        existing.value = value
+    else:
+        existing = VoteRecord(
+            target_type="discussion_post",
+            target_id=post.id,
+            voter_hash=voter_hash,
+            value=value,
+        )
+        db.session.add(existing)
+
+    _apply_vote(post, value)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "upvotes": post.upvotes or 0,
+            "downvotes": post.downvotes or 0,
+            "score": (post.upvotes or 0) - (post.downvotes or 0),
+        }
     )
-    resp.set_cookie(cookie_key, str(value))
-    return resp
 
 
 @api_bp.route("/discusiones/comentarios/<int:comment_id>/vote", methods=["POST"])
-@limiter.limit("30/minute; 500/day")
+@limiter.limit("10/minute; 200/day")
 def vote_discussion_comment(comment_id):
     comment = DiscussionComment.query.get_or_404(comment_id)
     data = request.get_json(silent=True) or {}
@@ -750,39 +772,15 @@ def vote_discussion_comment(comment_id):
     if value not in (1, -1):
         return jsonify({"ok": False, "error": "Voto inválido."}), 400
 
-    cookie_key = f"discussion_comment_vote_{comment_id}"
-    prev = request.cookies.get(cookie_key)
-    prev_val = None
-    if prev in ("1", "-1"):
-        prev_val = int(prev)
+    voter_hash = _vote_identity_hash()
+    existing = VoteRecord.query.filter_by(
+        target_type="discussion_comment",
+        target_id=comment.id,
+        voter_hash=voter_hash,
+    ).first()
 
-    if prev_val == value:
-        resp = make_response(
-            jsonify(
-                {
-                    "ok": True,
-                    "upvotes": comment.upvotes or 0,
-                    "downvotes": comment.downvotes or 0,
-                    "score": (comment.upvotes or 0) - (comment.downvotes or 0),
-                }
-            )
-        )
-        resp.set_cookie(cookie_key, str(value))
-        return resp
-
-    if prev_val == 1:
-        comment.upvotes = max((comment.upvotes or 0) - 1, 0)
-    elif prev_val == -1:
-        comment.downvotes = max((comment.downvotes or 0) - 1, 0)
-
-    if value == 1:
-        comment.upvotes = (comment.upvotes or 0) + 1
-    else:
-        comment.downvotes = (comment.downvotes or 0) + 1
-    db.session.commit()
-
-    resp = make_response(
-        jsonify(
+    if existing and existing.value == value:
+        return jsonify(
             {
                 "ok": True,
                 "upvotes": comment.upvotes or 0,
@@ -790,9 +788,30 @@ def vote_discussion_comment(comment_id):
                 "score": (comment.upvotes or 0) - (comment.downvotes or 0),
             }
         )
+
+    if existing:
+        _remove_vote(comment, existing.value)
+        existing.value = value
+    else:
+        existing = VoteRecord(
+            target_type="discussion_comment",
+            target_id=comment.id,
+            voter_hash=voter_hash,
+            value=value,
+        )
+        db.session.add(existing)
+
+    _apply_vote(comment, value)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "ok": True,
+            "upvotes": comment.upvotes or 0,
+            "downvotes": comment.downvotes or 0,
+            "score": (comment.upvotes or 0) - (comment.downvotes or 0),
+        }
     )
-    resp.set_cookie(cookie_key, str(value))
-    return resp
 
 
 @api_bp.route("/posts/<int:post_id>/media", methods=["POST"])

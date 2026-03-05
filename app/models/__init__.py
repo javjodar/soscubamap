@@ -15,6 +15,7 @@ from .discussion_post import DiscussionPost
 from .discussion_comment import DiscussionComment
 from .discussion_tag import DiscussionTag, discussion_post_tags
 from .push_subscription import PushSubscription
+from .vote_record import VoteRecord
 
 __all__ = [
     "User",
@@ -35,4 +36,5 @@ __all__ = [
     "DiscussionTag",
     "discussion_post_tags",
     "PushSubscription",
+    "VoteRecord",
 ]
