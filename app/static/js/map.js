@@ -875,7 +875,7 @@ window.initMap = async function () {
   google.maps.event.addListenerOnce(map, "idle", () => {
     const currentZoom = map.getZoom();
     if (typeof currentZoom === "number") {
-      const relaxedZoom = Math.max(currentZoom - 1, 3);
+      const relaxedZoom = Math.max(currentZoom - 2, 3);
       map.setZoom(relaxedZoom);
       map.setOptions({ minZoom: relaxedZoom });
     }
