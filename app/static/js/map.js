@@ -157,29 +157,28 @@ function adjustInfoWindowOffset(info, position) {
 document.addEventListener("DOMContentLoaded", () => {
   const filters = document.querySelector(".filters");
   const toggle = document.getElementById("filtersToggle");
-  if (!filters || !toggle) return;
+  if (filters && toggle) {
+    toggle.addEventListener("click", () => {
+      const isCollapsed = filters.classList.toggle("collapsed");
+      toggle.textContent = isCollapsed ? "Mostrar filtros" : "Ocultar filtros";
+      toggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+    });
+  }
 
-  toggle.addEventListener("click", () => {
-    const isCollapsed = filters.classList.toggle("collapsed");
-    toggle.textContent = isCollapsed ? "Mostrar filtros" : "Ocultar filtros";
-    toggle.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
-  });
-});
-
-document.addEventListener("DOMContentLoaded", () => {
-  const floatWrap = document.getElementById("mapSearchFloat");
-  const hideBtn = document.getElementById("mapSearchHide");
-  const showBtn = document.getElementById("mapSearchShow");
-  if (!floatWrap || !hideBtn || !showBtn) return;
-
-  const setVisible = (visible) => {
-    floatWrap.classList.toggle("is-hidden", !visible);
-    showBtn.classList.toggle("is-visible", !visible);
-  };
-
-  hideBtn.addEventListener("click", () => setVisible(false));
-  showBtn.addEventListener("click", () => setVisible(true));
-  setVisible(true);
+  const searchInput = document.getElementById("mapSearch");
+  if (searchInput) {
+    const placeholders = [
+      "Ej: Sector PNR",
+      "Ej: Prisión",
+      "Ej: Unidad Militar",
+      "Ej: Tropas",
+      "Ej: Estación de policía",
+      "Ej: Centro de detención",
+      "Ej: Brigada Especial",
+    ];
+    const pick = placeholders[Math.floor(Math.random() * placeholders.length)];
+    searchInput.setAttribute("placeholder", pick);
+  }
 });
 
 function setupMapImageModal() {

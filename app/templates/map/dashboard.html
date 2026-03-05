@@ -85,6 +85,11 @@
   </div>
 </section>
 
+<section class="map-search-bar">
+  <label for="mapSearch" class="map-search-label">Buscar dirección (Cuba)</label>
+  <input id="mapSearch" type="text" placeholder="Ej: Sector PNR" />
+</section>
+
 <section class="map-wrap">
   <div
     id="map"
@@ -95,13 +100,6 @@
     data-is-admin="{{ 1 if current_user.is_authenticated and current_user.has_role('administrador') else 0 }}"
     data-allow-zoom="1"
   >
-    <div id="mapSearchFloat" class="map-search-float">
-      <div class="map-search-input">
-        <input id="mapSearch" type="text" placeholder="Buscar dirección (Cuba)" />
-        <button type="button" class="map-search-hide" id="mapSearchHide">Ocultar</button>
-      </div>
-    </div>
-    <button type="button" class="map-search-show" id="mapSearchShow">Buscar</button>
     <div class="map-placeholder">
       <div class="map-title">Google Maps</div>
       <div class="map-subtitle">Conecta tu API key para activar el mapa.</div>
