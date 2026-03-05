@@ -189,7 +189,7 @@ h3 {
 
 .map-wrap {
   margin: 32px 0;
-  overflow: visible !important;
+  overflow: hidden;
 }
 
 .filters {
@@ -266,7 +266,7 @@ h3 {
   border-radius: 12px;
   background: linear-gradient(135deg, #0e1419, #101b21);
   position: relative;
-  overflow: visible !important;
+  overflow: hidden;
   box-shadow: 0 20px 40px var(--shadow);
   touch-action: pan-x pan-y pinch-zoom;
 }
@@ -281,20 +281,20 @@ h3 {
 }
 
 .map-canvas .gm-style .gm-style-iw-c {
-  background: rgba(245, 250, 246, 0.88) !important;
+  background: rgba(245, 250, 246, 0.82) !important;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 
 .map-canvas .gm-style .gm-style-iw-t,
 .map-canvas .gm-style .gm-style-iw-t::after {
-  background: rgba(245, 250, 246, 0.88) !important;
+  background: rgba(245, 250, 246, 0.82) !important;
 }
 
 .map-canvas .gm-style .gm-style-iw-c.iw-fade,
 .map-canvas .gm-style .gm-style-iw-t.iw-fade {
   opacity: 0;
-  transition: opacity 140ms ease;
+  transition: opacity 220ms ease;
 }
 
 .map-canvas .gm-style .gm-style-iw-c.iw-fade.iw-fade-in,
