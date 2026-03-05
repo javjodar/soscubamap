@@ -65,6 +65,37 @@
   </div>
 </section>
 
+<section class="panel">
+  <h2>Registro de donaciones</h2>
+  <p class="muted">Transparencia sobre los aportes recibidos y su destino.</p>
+  {% if donation_logs and donation_logs|length %}
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Monto</th>
+            <th>Vía</th>
+            <th>Fecha</th>
+            <th>Destino</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in donation_logs %}
+            <tr>
+              <td>{{ log.amount }}</td>
+              <td>{{ log.method }}</td>
+              <td>{{ log.donated_at }}</td>
+              <td>{{ log.destination }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="muted">No hay donaciones registradas aún.</div>
+  {% endif %}
+</section>
+
 <script>
   const copyBtn = document.getElementById("copyBtc");
   copyBtn?.addEventListener("click", async () => {

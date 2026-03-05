@@ -1,0 +1,29 @@
+{% extends "shared/base.html" %}
+{% block title %} | Editar donación{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Editar donación</h1>
+  <form method="post" class="form-grid">
+    <label>
+      Monto de la donación
+      <input type="text" name="amount" value="{{ log.amount }}" required />
+    </label>
+    <label>
+      Vía de la donación
+      <input type="text" name="method" value="{{ log.method }}" required />
+    </label>
+    <label>
+      Fecha de la donación
+      <input type="date" name="donated_at" value="{{ log.donated_at }}" required />
+    </label>
+    <label>
+      Destino de la donación
+      <input type="text" name="destination" value="{{ log.destination }}" required />
+    </label>
+    <div style="display:flex; gap:12px;">
+      <button type="submit" class="btn-primary">Guardar cambios</button>
+      <a class="btn-secondary" href="{{ url_for('admin.donations') }}">Volver</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

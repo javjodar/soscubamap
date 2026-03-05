@@ -11,6 +11,7 @@ from flask_login import current_user
 from sqlalchemy.orm import selectinload
 
 from app.models.category import Category
+from app.models.donation_log import DonationLog
 from app.models.post import Post
 from app.models.user import User
 from app.models.role import Role
@@ -594,7 +595,8 @@ def new_post():
 
 @map_bp.route("/donar")
 def donate():
-    return render_template("map/donate.html")
+    logs = DonationLog.query.order_by(DonationLog.donated_at.desc()).all()
+    return render_template("map/donate.html", donation_logs=logs)
 
 
 @map_bp.route("/acerca")

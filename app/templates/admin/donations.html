@@ -1,0 +1,68 @@
+{% extends "shared/base.html" %}
+{% block title %} | Donaciones{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Registro de donaciones</h1>
+  <p>Agrega y revisa aportes recibidos. Estos se muestran en la página pública de donaciones.</p>
+
+  <div class="admin-section">
+    <h2>Nueva donación</h2>
+    <form method="post" class="form-grid">
+      <label>
+        Monto de la donación
+        <input type="text" name="amount" placeholder="Ej: 25 USD / 0.001 BTC" required />
+      </label>
+      <label>
+        Vía de la donación
+        <input type="text" name="method" placeholder="Ej: Bitcoin, QvaPay, BMC" required />
+      </label>
+      <label>
+        Fecha de la donación
+        <input type="date" name="donated_at" required />
+      </label>
+      <label>
+        Destino de la donación
+        <input type="text" name="destination" placeholder="Ej: Servidor / API Maps / Dominio" required />
+      </label>
+      <button type="submit" class="btn-primary">Guardar</button>
+    </form>
+  </div>
+
+  <div class="admin-section">
+    <h2>Historial</h2>
+    {% if donation_logs and donation_logs|length %}
+      <div class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Monto</th>
+              <th>Vía</th>
+              <th>Fecha</th>
+              <th>Destino</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in donation_logs %}
+              <tr>
+                <td>{{ log.amount }}</td>
+                <td>{{ log.method }}</td>
+                <td>{{ log.donated_at }}</td>
+                <td>{{ log.destination }}</td>
+                <td>
+                  <a class="btn-secondary" href="{{ url_for('admin.edit_donation', log_id=log.id) }}">Editar</a>
+                  <form method="post" action="{{ url_for('admin.delete_donation', log_id=log.id) }}" style="display:inline;">
+                    <button type="submit" class="btn-secondary" onclick="return confirm('¿Eliminar esta donación?')">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="muted">No hay donaciones registradas.</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

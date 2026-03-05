@@ -11,6 +11,7 @@ from app.models.location_report import LocationReport
 from app.models.post_revision import PostRevision
 from app.models.post_edit_request import PostEditRequest
 from app.models.category import Category
+from app.models.donation_log import DonationLog
 from app.extensions import db
 from app.models.media import Media
 from app.services.media_upload import media_json_from_post, parse_media_json, get_media_payload
@@ -100,6 +101,90 @@ def discussions():
         .all()
     )
     return render_template("admin/discussions.html", posts=posts, comment_counts=counts)
+
+
+@admin_bp.route("/donaciones", methods=["GET", "POST"])
+@login_required
+@role_required("administrador")
+def donations():
+    if request.method == "POST":
+        amount = request.form.get("amount", "").strip()
+        method = request.form.get("method", "").strip()
+        donated_at = request.form.get("donated_at", "").strip()
+        destination = request.form.get("destination", "").strip()
+
+        errors = []
+        if not amount:
+            errors.append("Monto obligatorio.")
+        if not method:
+            errors.append("Vía obligatoria.")
+        if not donated_at:
+            errors.append("Fecha obligatoria.")
+        if not destination:
+            errors.append("Destino obligatorio.")
+
+        if errors:
+            for msg in errors:
+                flash(msg, "error")
+        else:
+            try:
+                donated_date = datetime.strptime(donated_at, "%Y-%m-%d").date()
+                db.session.add(
+                    DonationLog(
+                        amount=amount,
+                        method=method,
+                        donated_at=donated_date,
+                        destination=destination,
+                    )
+                )
+                db.session.commit()
+                flash("Donación registrada.", "success")
+                return redirect(url_for("admin.donations"))
+            except Exception:
+                flash("Fecha inválida. Usa formato YYYY-MM-DD.", "error")
+
+    logs = DonationLog.query.order_by(DonationLog.donated_at.desc()).all()
+    return render_template("admin/donations.html", donation_logs=logs)
+
+
+@admin_bp.route("/donaciones/<int:log_id>/editar", methods=["GET", "POST"])
+@login_required
+@role_required("administrador")
+def edit_donation(log_id):
+    log = DonationLog.query.get_or_404(log_id)
+    if request.method == "POST":
+        amount = request.form.get("amount", "").strip()
+        method = request.form.get("method", "").strip()
+        donated_at = request.form.get("donated_at", "").strip()
+        destination = request.form.get("destination", "").strip()
+
+        if not amount or not method or not donated_at or not destination:
+            flash("Completa todos los campos.", "error")
+            return redirect(url_for("admin.edit_donation", log_id=log.id))
+
+        try:
+            log.amount = amount
+            log.method = method
+            log.donated_at = datetime.strptime(donated_at, "%Y-%m-%d").date()
+            log.destination = destination
+            db.session.commit()
+            flash("Donación actualizada.", "success")
+            return redirect(url_for("admin.donations"))
+        except Exception:
+            flash("Fecha inválida. Usa formato YYYY-MM-DD.", "error")
+
+    return render_template("admin/edit_donation.html", log=log)
+
+
+@admin_bp.route("/donaciones/<int:log_id>/eliminar", methods=["POST"])
+@login_required
+@role_required("administrador")
+def delete_donation(log_id):
+    log = DonationLog.query.get_or_404(log_id)
+    db.session.delete(log)
+    db.session.commit()
+    flash("Donación eliminada.", "success")
+    return redirect(url_for("admin.donations"))
 
 
 @admin_bp.route("/discusiones/<int:post_id>/editar", methods=["GET", "POST"])
