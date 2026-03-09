@@ -125,6 +125,17 @@ function cubaBounds() {
   );
 }
 
+function isInsideCubaBounds(lat, lng) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= CUBA_BOUNDS.south &&
+    lat <= CUBA_BOUNDS.north &&
+    lng >= CUBA_BOUNDS.west &&
+    lng <= CUBA_BOUNDS.east
+  );
+}
+
 function enableMiddleClickPan(leafletMap) {
   const container = leafletMap?.getContainer?.();
   if (!container) return;
@@ -225,6 +236,22 @@ function setupCategoryRequirements() {
 
   if (form) {
     form.addEventListener("submit", (e) => {
+      const latInput = document.querySelector('input[name="latitude"]');
+      const lngInput = document.querySelector('input[name="longitude"]');
+      const lat = parseFloat(latInput?.value || "");
+      const lng = parseFloat(lngInput?.value || "");
+      if (!isInsideCubaBounds(lat, lng)) {
+        e.preventDefault();
+        if (status) {
+          status.textContent =
+            "La ubicación debe estar dentro del territorio cubano.";
+        } else {
+          alert("La ubicación debe estar dentro del territorio cubano.");
+        }
+        if (latInput) latInput.focus();
+        return;
+      }
+
       const key = getCategoryKey(select);
       if (isResidenciaCategory(key)) {
         const hasFiles = imageInput && imageInput.files && imageInput.files.length > 0;
@@ -405,7 +432,8 @@ function setupDrawMap() {
     )
     .addTo(drawMap);
 
-  drawMap.setMaxBounds(cubaBounds().pad(0.35));
+  drawMap.setMaxBounds(cubaBounds());
+  drawMap.options.maxBoundsViscosity = 1.0;
 
   if (hasPreset) {
     addCenterMarker({ lat, lng });
