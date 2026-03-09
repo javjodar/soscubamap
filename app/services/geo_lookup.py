@@ -64,6 +64,12 @@ _cache = {
 }
 
 
+CUBA_LAT_MIN = 19.0
+CUBA_LAT_MAX = 24.2
+CUBA_LNG_MIN = -86.2
+CUBA_LNG_MAX = -73.0
+
+
 def _get_env_or_config(key, default=None):
     try:
         from flask import current_app
@@ -244,3 +250,15 @@ def municipalities_map():
     if mapping:
         return {province: sorted(list(names)) for province, names in mapping.items()}
     return MUNICIPALITIES
+
+
+def is_within_cuba_bounds(lat, lng):
+    try:
+        lat_value = float(lat)
+        lng_value = float(lng)
+    except Exception:
+        return False
+    return (
+        CUBA_LAT_MIN <= lat_value <= CUBA_LAT_MAX
+        and CUBA_LNG_MIN <= lng_value <= CUBA_LNG_MAX
+    )

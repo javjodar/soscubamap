@@ -37,6 +37,7 @@ from app.services.category_rules import is_other_type_allowed
 from app.services.category_sort import sort_categories_for_forms
 from app.services.content_quality import validate_description, validate_title
 from app.services.geo_lookup import (
+    is_within_cuba_bounds,
     list_municipalities,
     list_provinces,
     lookup_location,
@@ -466,6 +467,10 @@ def new_post():
                 errors["latitude"] = "Latitud inválida."
                 errors["longitude"] = "Longitud inválida."
 
+        if lat is not None and lng is not None and not is_within_cuba_bounds(lat, lng):
+            errors["latitude"] = "La ubicación debe estar dentro del territorio cubano."
+            errors["longitude"] = "La ubicación debe estar dentro del territorio cubano."
+
         if lat is not None and lng is not None:
             province, municipality = _resolve_geo_location(
                 lat, lng, form_data["province"], form_data["municipality"]
@@ -505,6 +510,10 @@ def new_post():
             lng = Decimal(form_data["longitude"])
         except Exception:
             flash("Latitud/longitud inválidas.", "error")
+            return redirect(url_for("map.new_post"))
+
+        if not is_within_cuba_bounds(lat, lng):
+            flash("La ubicación debe estar dentro del territorio cubano.", "error")
             return redirect(url_for("map.new_post"))
 
         province, municipality = _resolve_geo_location(
