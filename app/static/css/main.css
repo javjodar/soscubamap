@@ -263,7 +263,7 @@ h3 {
 }
 
 .map-canvas {
-  height: min(99vh, 1120px);
+  height: min(59.4vh, 672px);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: linear-gradient(135deg, #0e1419, #101b21);
@@ -331,6 +331,10 @@ h3 {
   overflow-y: auto;
   z-index: 1300;
   display: grid;
+}
+
+.map-search-suggestions[hidden] {
+  display: none !important;
 }
 
 .map-search-suggestion {
