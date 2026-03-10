@@ -1,10 +1,10 @@
 function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
-    .replaceAll("'", "&#39;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function linkify(text) {
@@ -36,8 +36,8 @@ let latestRenderedMessageId = 0;
 function renderChat(payload) {
   const container = document.getElementById("chatMessages");
   if (!container) return [];
-  const items = payload?.items || [];
-  const onlineCount = payload?.online_count;
+  const items = payload && Array.isArray(payload.items) ? payload.items : [];
+  const onlineCount = payload ? payload.online_count : undefined;
   const onlineEl = document.getElementById("chatOnlineCount");
   if (onlineEl && typeof onlineCount !== "undefined") {
     onlineEl.textContent = onlineCount;
@@ -68,7 +68,7 @@ function renderChat(payload) {
     .join("");
 
   latestRenderedMessageId = items.reduce((maxId, msg) => {
-    const id = Number(msg?.id || 0);
+    const id = Number((msg && msg.id) || 0);
     return id > maxId ? id : maxId;
   }, 0);
 
@@ -91,12 +91,12 @@ function setUnreadCount(unreadEl, count) {
 }
 
 function isChatOpen(widget) {
-  return !!widget?.classList.contains("is-open");
+  return !!(widget && widget.classList.contains("is-open"));
 }
 
 function updateUnreadState(widget, unreadEl, items) {
   const latestId = items.reduce((maxId, msg) => {
-    const id = Number(msg?.id || 0);
+    const id = Number((msg && msg.id) || 0);
     return id > maxId ? id : maxId;
   }, 0);
 
@@ -117,7 +117,7 @@ function updateUnreadState(widget, unreadEl, items) {
     return;
   }
 
-  const unread = items.filter((msg) => Number(msg?.id || 0) > lastSeenMessageId).length;
+  const unread = items.filter((msg) => Number((msg && msg.id) || 0) > lastSeenMessageId).length;
   setUnreadCount(unreadEl, unread);
 }
 
@@ -138,7 +138,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const nickInput = document.getElementById("chatNick");
   const messageInput = document.getElementById("chatMessage");
   const container = document.getElementById("chatMessages");
-  let suppressSyntheticClicksUntil = 0;
 
   const openChat = () => {
     if (!widget) return;
@@ -190,56 +189,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  const bindTapOrClick = (element, handler) => {
-    if (!element) return;
-    let suppressClick = false;
-
-    element.addEventListener(
-      "touchend",
-      (event) => {
-        suppressClick = true;
-        suppressSyntheticClicksUntil = Date.now() + 400;
-        event.preventDefault();
-        handler(event);
-        window.setTimeout(() => {
-          suppressClick = false;
-        }, 350);
-      },
-      { passive: false }
-    );
-
-    element.addEventListener("click", (event) => {
-      if (Date.now() < suppressSyntheticClicksUntil) return;
-      if (suppressClick) return;
-      handler(event);
-    });
-  };
-
-  bindTapOrClick(toggleBtn, () => {
+  const toggleChat = () => {
     if (isChatOpen(widget)) {
       closeChat();
     } else {
       openChat();
     }
-  });
+  };
 
-  bindTapOrClick(closeBtn, () => {
-    closeChat();
-  });
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleChat();
+    });
+  }
 
-  bindTapOrClick(backdrop, () => {
-    closeChat();
-  });
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeChat);
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", closeChat);
+  }
 
   if (toggleBtn) {
     toggleBtn.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
-      if (isChatOpen(widget)) {
-        closeChat();
-      } else {
-        openChat();
-      }
+      toggleChat();
     });
   }
 
@@ -253,14 +230,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const nickname = nickInput?.value.trim() || "Anon";
-      const body = messageInput?.value.trim();
+      const nicknameRaw = nickInput && nickInput.value ? nickInput.value.trim() : "";
+      const nickname = nicknameRaw || "Anon";
+      const body = messageInput && messageInput.value ? messageInput.value.trim() : "";
       if (!body) return;
       await sendChatMessage(nickname, body);
-      messageInput.value = "";
+      if (messageInput) {
+        messageInput.value = "";
+      }
       await refresh();
       markCurrentAsRead(unreadEl);
-      messageInput.focus();
+      if (messageInput) {
+        messageInput.focus();
+      }
     });
   }
 

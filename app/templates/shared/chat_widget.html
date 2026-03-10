@@ -1,0 +1,57 @@
+<section id="chatWidget" class="chat-widget" data-state="closed">
+  <button
+    type="button"
+    id="chatWidgetToggle"
+    class="chat-widget-toggle"
+    aria-expanded="false"
+    aria-controls="chatbox"
+  >
+    <span class="chat-widget-toggle-icon"><i class="fa-solid fa-comments"></i></span>
+    <span class="chat-widget-toggle-label">Chat en vivo</span>
+    <span id="chatUnreadCount" class="chat-widget-unread is-hidden">0</span>
+  </button>
+  <div id="chatWidgetBackdrop" class="chat-widget-backdrop" data-close-chat-widget hidden></div>
+  <section id="chatbox" class="chatbox chat-widget-panel">
+    <div class="chat-header">
+      <div class="chat-title">Chat colaborativo</div>
+      <div class="chat-meta">
+        <span class="chat-online"><span id="chatOnlineCount">0</span> en línea</span>
+        <span class="chat-status">Últimas 24 horas</span>
+      </div>
+      <button
+        type="button"
+        id="chatWidgetClose"
+        class="chat-widget-close"
+        aria-label="Cerrar chat"
+      >
+        &times;
+      </button>
+    </div>
+    <div id="chatMessages" class="chat-body">
+      <div class="chat-empty">Sin mensajes aún.</div>
+    </div>
+    <form id="chatForm" class="chat-form">
+      <label>
+        Nickname (solo chat)
+        <input
+          type="text"
+          id="chatNick"
+          name="nickname"
+          value="{{ chat_nick if chat_nick is defined else (session.get('chat_nick') or '') }}"
+          maxlength="80"
+        />
+      </label>
+      <label class="chat-message">
+        Mensaje
+        <input
+          type="text"
+          id="chatMessage"
+          name="message"
+          placeholder="Escribe un mensaje o enlace..."
+          required
+        />
+      </label>
+      <button type="submit" class="btn-primary chat-send">Enviar</button>
+    </form>
+  </section>
+</section>

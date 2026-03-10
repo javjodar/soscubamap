@@ -33,7 +33,7 @@
       </a>
       <nav class="nav-links">
         <a href="{{ url_for('map.dashboard') }}">Mapa</a>
-        <a href="{{ url_for('map.dashboard') }}#chatbox">Chat</a>
+        <a href="#chatbox">Chat</a>
         <a href="{{ url_for('discussions.index') }}">Discusiones</a>
         {% if current_user.is_authenticated %}
           <button class="btn-secondary" type="button" data-open-report data-url="{{ url_for('map.new_post') }}">Nuevo reporte</button>
@@ -80,6 +80,10 @@
     </main>
 
     {% if not request.args.get('modal') %}
+      {% include "shared/chat_widget.html" %}
+    {% endif %}
+
+    {% if not request.args.get('modal') %}
     <footer class="site-footer">
       <div>Plataforma colaborativa y anónima.</div>
       <a class="footer-link" href="{{ url_for('map.api_docs') }}">API</a>
@@ -97,6 +101,9 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+    {% if not request.args.get('modal') %}
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    {% endif %}
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
