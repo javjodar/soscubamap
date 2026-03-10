@@ -1010,6 +1010,13 @@ async function initMap() {
       maxZoom: 19,
     }
   );
+  const satelliteLabelsLayer = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution: "Labels &copy; Esri",
+      maxZoom: 19,
+    }
+  );
 
   streetsLayer.addTo(map);
   L.control
@@ -1022,6 +1029,14 @@ async function initMap() {
       { collapsed: true }
     )
     .addTo(map);
+
+  map.on("baselayerchange", (event) => {
+    if (event.layer === satelliteLayer) {
+      if (!map.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(map);
+    } else if (map.hasLayer(satelliteLabelsLayer)) {
+      map.removeLayer(satelliteLabelsLayer);
+    }
+  });
 
   const cubaBounds = cubaLatLngBounds();
   map.fitBounds(cubaBounds);

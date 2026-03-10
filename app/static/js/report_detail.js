@@ -479,6 +479,13 @@ function initDetailMap() {
       maxZoom: 19,
     }
   );
+  const satelliteLabelsLayer = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution: "Labels &copy; Esri",
+      maxZoom: 19,
+    }
+  );
 
   streetsLayer.addTo(map);
   L.control
@@ -491,6 +498,14 @@ function initDetailMap() {
       { collapsed: true }
     )
     .addTo(map);
+
+  map.on("baselayerchange", (event) => {
+    if (event.layer === satelliteLayer) {
+      if (!map.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(map);
+    } else if (map.hasLayer(satelliteLabelsLayer)) {
+      map.removeLayer(satelliteLabelsLayer);
+    }
+  });
 
   map.setMaxBounds(bounds.pad(0.35));
   L.marker([lat, lng]).addTo(map);

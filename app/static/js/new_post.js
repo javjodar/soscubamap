@@ -419,8 +419,16 @@ function setupDrawMap() {
       maxZoom: 19,
     }
   );
+  const satelliteLabelsLayer = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution: "Labels &copy; Esri",
+      maxZoom: 19,
+    }
+  );
 
   satelliteLayer.addTo(drawMap);
+  satelliteLabelsLayer.addTo(drawMap);
   L.control
     .layers(
       {
@@ -431,6 +439,14 @@ function setupDrawMap() {
       { collapsed: true }
     )
     .addTo(drawMap);
+
+  drawMap.on("baselayerchange", (event) => {
+    if (event.layer === satelliteLayer) {
+      if (!drawMap.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(drawMap);
+    } else if (drawMap.hasLayer(satelliteLabelsLayer)) {
+      drawMap.removeLayer(satelliteLabelsLayer);
+    }
+  });
 
   drawMap.setMaxBounds(cubaBounds());
   drawMap.options.maxBoundsViscosity = 1.0;
