@@ -88,6 +88,18 @@ Para configuracion completa e import de datos OSM, ver:
 
 - `README.maps-selfhosted.es.md`
 
+## Tests
+
+El proyecto incluye una suite de tests unitarios con pytest.
+
+```bash
+# Ejecutar todos los tests
+pytest
+
+# Con reporte de coverage
+pytest tests/unit/ -v --cov=app/services --cov-report=term-missing
+```
+
 ## Roles
 
 - colaborador: cuenta estandar
