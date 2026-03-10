@@ -16,3 +16,5 @@ pywebpush==1.14.0
 requests==2.31.0
 urllib3==2.2.3
 charset-normalizer==3.3.2
+pytest==8.1.1
+pytest-cov==5.0.0
