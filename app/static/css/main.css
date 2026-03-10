@@ -693,6 +693,7 @@ h3 {
 
 .chat-author {
   color: #0b5f8f;
+  font-weight: 700;
 }
 
 .chat-body-line {
@@ -854,6 +855,7 @@ body.chat-widget-mobile-open {
     right: 14px;
     bottom: 14px;
     gap: 0;
+    pointer-events: auto;
   }
 
   .chat-widget-toggle {
@@ -863,6 +865,8 @@ body.chat-widget-mobile-open {
     padding: 0;
     justify-content: center;
     box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .chat-widget-toggle-label {
@@ -2829,7 +2833,9 @@ textarea {
   }
 
   .map-canvas {
-    height: 444px;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
   }
 
 }

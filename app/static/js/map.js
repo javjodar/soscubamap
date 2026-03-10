@@ -18,6 +18,9 @@ const CUBA_BOUNDS = {
   west: -86.2,
   east: -73.0,
 };
+const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
+const HAVANA_CENTER = [23.1136, -82.3666];
+const MOBILE_HAVANA_ZOOM = 9;
 
 function cubaLatLngBounds() {
   return L.latLngBounds(
@@ -1038,9 +1041,14 @@ async function initMap() {
     }
   });
 
+  const isMobileViewport =
+    typeof window.matchMedia === "function" && window.matchMedia(MOBILE_VIEWPORT_QUERY).matches;
   const cubaBounds = cubaLatLngBounds();
-  map.fitBounds(cubaBounds);
-  map.setMaxBounds(cubaBounds.pad(0.35));
+  map.fitBounds(cubaBounds, { padding: isMobileViewport ? [0, 0] : [16, 16] });
+  if (isMobileViewport) {
+    map.setView(HAVANA_CENTER, MOBILE_HAVANA_ZOOM);
+  }
+  map.setMaxBounds(cubaBounds.pad(isMobileViewport ? 0.2 : 0.35));
 
   const params = new URLSearchParams(window.location.search);
   const latParam = parseFloat(params.get("lat"));

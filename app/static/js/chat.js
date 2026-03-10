@@ -189,22 +189,55 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const bindTapOrClick = (element, handler) => {
+    if (!element) return;
+    let suppressClick = false;
+
+    element.addEventListener(
+      "touchend",
+      (event) => {
+        suppressClick = true;
+        event.preventDefault();
+        handler(event);
+        window.setTimeout(() => {
+          suppressClick = false;
+        }, 350);
+      },
+      { passive: false }
+    );
+
+    element.addEventListener("click", (event) => {
+      if (suppressClick) return;
+      handler(event);
+    });
+  };
+
+  bindTapOrClick(toggleBtn, () => {
+    if (isChatOpen(widget)) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  });
+
+  bindTapOrClick(closeBtn, () => {
+    closeChat();
+  });
+
+  bindTapOrClick(backdrop, () => {
+    closeChat();
+  });
+
   if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
+    toggleBtn.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
       if (isChatOpen(widget)) {
         closeChat();
       } else {
         openChat();
       }
     });
-  }
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", closeChat);
-  }
-
-  if (backdrop) {
-    backdrop.addEventListener("click", closeChat);
   }
 
   window.addEventListener("resize", syncViewportState);
