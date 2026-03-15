@@ -474,6 +474,66 @@ h3 {
   font-size: 11px;
 }
 
+.connectivity-traffic-panel {
+  margin-top: 4px;
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.connectivity-traffic-title {
+  color: #d6fbe7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.connectivity-traffic-kpi {
+  color: #f3fff8;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.connectivity-traffic-meta {
+  display: grid;
+  gap: 2px;
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-sparkline {
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(214, 251, 231, 0.12);
+}
+
+.connectivity-sparkline .spark-prev,
+.connectivity-sparkline .spark-main {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.connectivity-sparkline .spark-prev {
+  stroke: rgba(249, 168, 37, 0.8);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+}
+
+.connectivity-sparkline .spark-main {
+  stroke: #6ee7b7;
+  stroke-width: 2.2;
+}
+
+.connectivity-traffic-note {
+  color: #9ec4b8;
+  font-size: 10px;
+}
+
 .pin-icon {
   width: 34px;
   height: 34px;
@@ -2855,6 +2915,13 @@ textarea {
   color: #9ef5cc;
   letter-spacing: 1px;
   text-transform: uppercase;
+}
+
+.analytics-kpi-line {
+  color: #b7ddd0;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 10px;
 }
 
 .analytics-card canvas {

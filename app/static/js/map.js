@@ -11,6 +11,13 @@ let mapHintElement;
 let reportLegendSection;
 let connectivityLegendOverlay;
 let connectivityUpdatedLabel;
+let connectivityTrafficPanel;
+let connectivityTrafficValue;
+let connectivityTrafficDelta;
+let connectivityTrafficDrop;
+let connectivityTrafficNote;
+let connectivitySparkMain;
+let connectivitySparkPrev;
 let activePopup;
 let recentTimer;
 let searchMarker;
@@ -347,6 +354,47 @@ function formatUtcLabel(timestamp) {
     timeZone: "UTC",
     hour12: false,
   });
+}
+
+function formatMetricValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/D";
+  if (Math.abs(numeric) >= 1000) {
+    return numeric.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+  }
+  if (Math.abs(numeric) >= 10) {
+    return numeric.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+  }
+  return numeric.toLocaleString("es-ES", { maximumFractionDigits: 6 });
+}
+
+function formatPercentValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/D";
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${numeric.toFixed(1)}%`;
+}
+
+function buildSparklinePath(values, minValue, maxValue, width = 280, height = 56, pad = 4) {
+  if (!Array.isArray(values) || values.length < 2) return "";
+  const valid = values.filter((value) => Number.isFinite(Number(value))).map((value) => Number(value));
+  if (valid.length < 2) return "";
+
+  const min = Number.isFinite(minValue) ? Number(minValue) : Math.min(...valid);
+  const max = Number.isFinite(maxValue) ? Number(maxValue) : Math.max(...valid);
+  const span = Math.max(max - min, 1e-9);
+  const innerWidth = Math.max(width - pad * 2, 1);
+  const innerHeight = Math.max(height - pad * 2, 1);
+
+  let path = "";
+  values.forEach((value, idx) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    const x = pad + (values.length === 1 ? 0 : (idx / (values.length - 1)) * innerWidth);
+    const y = height - pad - ((numeric - min) / span) * innerHeight;
+    path += `${path ? " L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+  });
+  return path;
 }
 
 function getSelectedCategoryIds() {
@@ -821,6 +869,80 @@ function updateConnectivityUpdatedLabel(payload) {
   connectivityUpdatedLabel.textContent = text;
 }
 
+function updateConnectivityTrafficPanel(payload) {
+  if (
+    !connectivityTrafficPanel ||
+    !connectivityTrafficValue ||
+    !connectivityTrafficDelta ||
+    !connectivityTrafficDrop ||
+    !connectivityTrafficNote
+  ) {
+    return;
+  }
+  const traffic = payload?.http_requests_24h || {};
+  const available = !!traffic.available;
+  const seriesMain = Array.isArray(traffic.series_main) ? traffic.series_main : [];
+  const seriesPrev = Array.isArray(traffic.series_previous_aligned)
+    ? traffic.series_previous_aligned
+    : [];
+
+  if (!available || !seriesMain.length) {
+    connectivityTrafficValue.textContent = "N/D";
+    connectivityTrafficDelta.textContent = "Variacion vs control: N/D";
+    connectivityTrafficDrop.textContent = "Caida maxima: N/D";
+    connectivityTrafficNote.textContent = traffic.reason || "Sin serie 24h disponible.";
+    if (connectivitySparkMain) connectivitySparkMain.setAttribute("d", "");
+    if (connectivitySparkPrev) connectivitySparkPrev.setAttribute("d", "");
+    return;
+  }
+
+  const latestMain = Number(traffic.latest_main_value);
+  const latestPrev = Number(traffic.latest_previous_value);
+  const deltaPct = Number(traffic.delta_pct);
+  const maxDrop = Number(traffic.max_drop_from_peak_pct);
+
+  connectivityTrafficValue.textContent = `Ultimo valor: ${formatMetricValue(latestMain)}`;
+  connectivityTrafficDelta.textContent = `Variacion vs control: ${formatPercentValue(deltaPct)} (${formatMetricValue(
+    latestPrev
+  )})`;
+  connectivityTrafficDrop.textContent = `Caida maxima 24h: ${formatPercentValue(maxDrop)}`;
+
+  const latestTs = traffic.latest_timestamp_utc ? formatUtcLabel(traffic.latest_timestamp_utc) : "";
+  const pointCount = seriesMain.length;
+  connectivityTrafficNote.textContent = latestTs
+    ? `Puntos: ${pointCount} · Ultimo punto (UTC): ${latestTs}`
+    : `Puntos: ${pointCount}`;
+
+  const prevMap = new Map(
+    seriesPrev.map((item) => [item?.timestamp_utc || "", Number(item?.value)])
+  );
+  const mainValues = seriesMain.map((item) => Number(item?.value));
+  const prevValues = seriesMain.map((item) => {
+    const key = item?.timestamp_utc || "";
+    return prevMap.has(key) ? prevMap.get(key) : NaN;
+  });
+
+  const allValues = mainValues
+    .concat(prevValues)
+    .filter((value) => Number.isFinite(Number(value)))
+    .map((value) => Number(value));
+  const minValue = allValues.length ? Math.min(...allValues) : 0;
+  const maxValue = allValues.length ? Math.max(...allValues) : 1;
+
+  if (connectivitySparkMain) {
+    connectivitySparkMain.setAttribute(
+      "d",
+      buildSparklinePath(mainValues, minValue, maxValue)
+    );
+  }
+  if (connectivitySparkPrev) {
+    connectivitySparkPrev.setAttribute(
+      "d",
+      buildSparklinePath(prevValues, minValue, maxValue)
+    );
+  }
+}
+
 async function refreshConnectivityLayer() {
   if (activeBaseMode !== "connectivity") return;
   try {
@@ -831,9 +953,13 @@ async function refreshConnectivityLayer() {
       connectivityLastSnapshotId = snapshotId;
     }
     updateConnectivityUpdatedLabel(payload);
+    updateConnectivityTrafficPanel(payload);
   } catch (err) {
     if (connectivityUpdatedLabel) {
       connectivityUpdatedLabel.textContent = "No fue posible actualizar conectividad.";
+    }
+    if (connectivityTrafficNote) {
+      connectivityTrafficNote.textContent = "No fue posible cargar la serie HTTP 24h.";
     }
   }
 }
@@ -1265,6 +1391,13 @@ async function initMap() {
   reportLegendSection = document.getElementById("reportLegendSection");
   connectivityLegendOverlay = document.getElementById("connectivityLegendOverlay");
   connectivityUpdatedLabel = document.getElementById("connectivityUpdatedLabel");
+  connectivityTrafficPanel = document.getElementById("connectivityTrafficPanel");
+  connectivityTrafficValue = document.getElementById("connectivityTrafficValue");
+  connectivityTrafficDelta = document.getElementById("connectivityTrafficDelta");
+  connectivityTrafficDrop = document.getElementById("connectivityTrafficDrop");
+  connectivityTrafficNote = document.getElementById("connectivityTrafficNote");
+  connectivitySparkMain = document.getElementById("connectivitySparkMain");
+  connectivitySparkPrev = document.getElementById("connectivitySparkPrev");
 
   map = L.map(mapEl, {
     zoomControl: true,

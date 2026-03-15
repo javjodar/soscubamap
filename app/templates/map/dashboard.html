@@ -126,6 +126,25 @@
         <span>Apagón o conectividad crítica</span>
       </div>
       <div class="connectivity-updated" id="connectivityUpdatedLabel"></div>
+      <div class="connectivity-traffic-panel" id="connectivityTrafficPanel">
+        <div class="connectivity-traffic-title">Peticiones HTTP (ultimas 24h)</div>
+        <div class="connectivity-traffic-kpi" id="connectivityTrafficValue">N/D</div>
+        <div class="connectivity-traffic-meta">
+          <span id="connectivityTrafficDelta">Variacion vs control: N/D</span>
+          <span id="connectivityTrafficDrop">Caida maxima: N/D</span>
+        </div>
+        <svg
+          id="connectivitySparkline"
+          class="connectivity-sparkline"
+          viewBox="0 0 280 56"
+          preserveAspectRatio="none"
+          aria-label="Tendencia de peticiones HTTP ultimas 24h"
+        >
+          <path id="connectivitySparkPrev" class="spark-prev" d=""></path>
+          <path id="connectivitySparkMain" class="spark-main" d=""></path>
+        </svg>
+        <div class="connectivity-traffic-note" id="connectivityTrafficNote"></div>
+      </div>
       {% if current_user.is_authenticated and current_user.has_role('administrador') %}
         <div class="connectivity-source-credit">Hecho con tecnología de Cloudflare Radar</div>
       {% endif %}

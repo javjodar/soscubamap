@@ -44,6 +44,7 @@ from app.services.connectivity import (
     get_latest_hourly_point,
     score_to_status,
     serialize_snapshot_time,
+    to_float,
 )
 from app.services.connectivity_geo import (
     diagnose_province_geojson,
@@ -141,6 +142,141 @@ def _connectivity_payload_summary(payload):
         "latest_main": _serialize_point(latest_main),
         "latest_previous": _serialize_point(latest_previous),
         "latest_main_hourly": _serialize_point(latest_main_hourly),
+    }
+
+
+def _serialize_timeseries_point(point):
+    if not point:
+        return None
+    return {
+        "timestamp_utc": serialize_snapshot_time(point.get("timestamp")),
+        "value": to_float(point.get("value")),
+    }
+
+
+def _latest_successful_connectivity_run():
+    return (
+        ConnectivityIngestionRun.query.filter(
+            ConnectivityIngestionRun.status == "success",
+            ConnectivityIngestionRun.payload_json.isnot(None),
+            ConnectivityIngestionRun.payload_json != "",
+        )
+        .order_by(
+            ConnectivityIngestionRun.started_at_utc.desc(),
+            ConnectivityIngestionRun.id.desc(),
+        )
+        .first()
+    )
+
+
+def _build_http_requests_24h_summary():
+    run = _latest_successful_connectivity_run()
+    if not run or not run.payload_json:
+        return {
+            "available": False,
+            "reason": "No hay ingestas exitosas con payload.",
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    try:
+        payload = json.loads(run.payload_json)
+    except Exception as exc:
+        return {
+            "available": False,
+            "reason": f"Payload de ingesta invalido: {exc}",
+            "source_run_id": run.id,
+            "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+            "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    main_points_all = extract_series_points(payload, "main")
+    previous_points_all = extract_series_points(payload, "previous")
+    if not main_points_all:
+        return {
+            "available": False,
+            "reason": "La serie main no contiene puntos.",
+            "source_run_id": run.id,
+            "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+            "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    latest_ts = main_points_all[-1].get("timestamp")
+    window_start = latest_ts - timedelta(hours=24) if latest_ts else None
+    main_points = [
+        item
+        for item in main_points_all
+        if item.get("timestamp") is not None and (window_start is None or item.get("timestamp") >= window_start)
+    ]
+    if not main_points:
+        main_points = main_points_all[-24:]
+
+    previous_aligned = []
+    if previous_points_all and main_points:
+        align_count = min(len(previous_points_all), len(main_points))
+        prev_tail = previous_points_all[-align_count:]
+        main_tail = main_points[-align_count:]
+        for main_item, prev_item in zip(main_tail, prev_tail):
+            previous_aligned.append(
+                {
+                    "timestamp": main_item.get("timestamp"),
+                    "value": to_float(prev_item.get("value")),
+                }
+            )
+
+    main_values = [to_float(item.get("value")) for item in main_points]
+    main_values = [value for value in main_values if value is not None]
+
+    latest_main_value = to_float(main_points[-1].get("value")) if main_points else None
+    latest_previous_value = (
+        to_float(previous_aligned[-1].get("value")) if previous_aligned else None
+    )
+
+    delta_pct = None
+    if (
+        latest_main_value is not None
+        and latest_previous_value is not None
+        and latest_previous_value > 0
+    ):
+        delta_pct = ((latest_main_value - latest_previous_value) / latest_previous_value) * 100.0
+
+    peak_main_value = max(main_values) if main_values else None
+    min_main_value = min(main_values) if main_values else None
+    avg_main_value = (sum(main_values) / len(main_values)) if main_values else None
+
+    max_drop_from_peak_pct = None
+    if (
+        peak_main_value is not None
+        and min_main_value is not None
+        and peak_main_value > 0
+    ):
+        max_drop_from_peak_pct = ((peak_main_value - min_main_value) / peak_main_value) * 100.0
+
+    return {
+        "available": bool(main_points),
+        "source_run_id": run.id,
+        "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+        "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+        "latest_timestamp_utc": serialize_snapshot_time(main_points[-1].get("timestamp")) if main_points else None,
+        "latest_main_value": latest_main_value,
+        "latest_previous_value": latest_previous_value,
+        "delta_pct": delta_pct,
+        "peak_main_value": peak_main_value,
+        "min_main_value": min_main_value,
+        "avg_main_value": avg_main_value,
+        "max_drop_from_peak_pct": max_drop_from_peak_pct,
+        "series_main": [
+            point for point in (_serialize_timeseries_point(item) for item in main_points) if point
+        ],
+        "series_previous_aligned": [
+            point
+            for point in (_serialize_timeseries_point(item) for item in previous_aligned)
+            if point
+        ],
     }
 
 
@@ -313,6 +449,7 @@ def connectivity_latest():
         province_items.append(state)
 
     enriched_geojson = enrich_geojson_with_status(geojson, status_by_province)
+    http_requests_24h = _build_http_requests_24h_summary()
 
     return jsonify(
         {
@@ -322,6 +459,7 @@ def connectivity_latest():
             "has_geojson": bool((enriched_geojson.get("features") or [])),
             "provinces": province_items,
             "geojson": enriched_geojson,
+            "http_requests_24h": http_requests_24h,
             "source": {
                 "name": "Cloudflare Radar",
                 "url": "https://radar.cloudflare.com/",
@@ -1000,6 +1138,7 @@ def analytics_v1():
     )
     edit_status_map = {status: count for status, count in edit_status_query}
     connectivity_outages = _build_connectivity_outage_events(start_dt, end_dt, province=province)
+    connectivity_24h = _build_http_requests_24h_summary()
 
     return jsonify(
         {
@@ -1029,6 +1168,7 @@ def analytics_v1():
                 "rejected": edit_status_map.get("rejected", 0),
             },
             "connectivity_outages": connectivity_outages,
+            "connectivity_24h": connectivity_24h,
         }
     )
 
