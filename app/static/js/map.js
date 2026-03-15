@@ -62,6 +62,7 @@ let mapImageModal;
 let mapImageModalImg;
 let mapImageModalCaption;
 let pendingMarkers = [];
+let mainBaseLayers = {};
 
 const CUBA_BOUNDS = {
   north: 24.2,
@@ -101,6 +102,14 @@ const PROTEST_EVENT_COLORS = {
   related_unrest: "#f9a825",
   unresolved_location: "#d97706",
   context_only: "#64748b",
+};
+const MAP_POPUP_OPTIONS = {
+  maxWidth: 320,
+  maxHeight: 320,
+  autoPan: true,
+  keepInView: true,
+  autoPanPaddingTopLeft: [24, 120],
+  autoPanPaddingBottomRight: [24, 24],
 };
 
 function canUseGoogleMutant(provider) {
@@ -383,6 +392,42 @@ function closeActivePopup() {
   if (!map || !activePopup) return;
   map.closePopup(activePopup);
   activePopup = null;
+}
+
+async function ensureMapModeForReportFocus() {
+  if (!map || !mainBaseLayers?.streetsLayer) return;
+
+  const {
+    streetsLayer,
+    satelliteLayer,
+    satelliteLabelsLayer,
+    connectivityBaseLayer,
+    protestBaseLayer,
+  } = mainBaseLayers;
+
+  if (activeBaseMode === "connectivity") {
+    disableConnectivityMode();
+  }
+  if (activeBaseMode === "protests") {
+    disableProtestMode();
+  }
+
+  [satelliteLayer, connectivityBaseLayer, protestBaseLayer].forEach((layer) => {
+    if (layer && map.hasLayer(layer)) {
+      map.removeLayer(layer);
+    }
+  });
+
+  if (satelliteLabelsLayer && map.hasLayer(satelliteLabelsLayer)) {
+    map.removeLayer(satelliteLabelsLayer);
+  }
+
+  if (!map.hasLayer(streetsLayer)) {
+    streetsLayer.addTo(map);
+  }
+
+  activeBaseMode = "map";
+  await applyFilters();
 }
 
 function setMapHintVisible(visible) {
@@ -798,7 +843,7 @@ function renderMarkers(posts) {
     }).addTo(map);
 
     const popupHtml = popupHtmlForPost(post);
-    marker.bindPopup(popupHtml, { maxWidth: 300 });
+    marker.bindPopup(popupHtml, MAP_POPUP_OPTIONS);
 
     marker.on("popupopen", (evt) => {
       activePopup = evt.popup;
@@ -879,7 +924,7 @@ window.handleNewReport = function (payload) {
         <div style="font-size:12px;margin-top:6px;">Se mostrara cuando sea aprobado.</div>
       </div>
       `,
-      { maxWidth: 260 }
+      MAP_POPUP_OPTIONS
     );
 
     pendingMarkers.push(marker);
@@ -1438,6 +1483,17 @@ function getProtestColor(feature) {
   );
 }
 
+function createProtestFireIcon(feature) {
+  const color = getProtestColor(feature);
+  return L.divIcon({
+    className: "protest-fire-icon-wrap",
+    html: `<div class="protest-fire-icon" style="--protest-fire-color:${color}">🔥</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 26],
+    popupAnchor: [0, -24],
+  });
+}
+
 function protestPopupHtml(feature) {
   const props = feature?.properties || {};
   const title = escapeHtml(props.title || "Evento");
@@ -1602,15 +1658,11 @@ function renderProtestData(payload) {
     const lat = Number(coords[1]);
     const lng = Number(coords[0]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    const color = getProtestColor(feature);
     const featureId = Number(feature?.properties?.id);
     const isSelected = Number.isFinite(featureId) && featureId === protestSelectedFeatureId;
-    const marker = L.circleMarker([lat, lng], {
-      radius: isSelected ? 8 : 6,
-      color: "#0f172a",
-      weight: isSelected ? 2 : 1.4,
-      fillColor: color,
-      fillOpacity: 0.8,
+    const marker = L.marker([lat, lng], {
+      title: feature?.properties?.title || "Protesta",
+      icon: createProtestFireIcon(feature),
     });
     marker.bindTooltip(
       `${feature?.properties?.title || "Evento"} · ${
@@ -1621,7 +1673,7 @@ function renderProtestData(payload) {
         sticky: true,
       }
     );
-    marker.bindPopup(protestPopupHtml(feature), { maxWidth: 320 });
+    marker.bindPopup(protestPopupHtml(feature), MAP_POPUP_OPTIONS);
     marker.on("click", () => {
       protestSelectedFeatureId = Number(feature?.properties?.id) || null;
       renderProtestDetail(feature);
@@ -1765,12 +1817,13 @@ function renderRecent(posts) {
     .join("");
 
   container.querySelectorAll("[data-pan-lat]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const lat = parseFloat(btn.getAttribute("data-pan-lat"));
       const lng = parseFloat(btn.getAttribute("data-pan-lng"));
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || !map) return;
       const postId = parseInt(btn.getAttribute("data-post-id"), 10);
       const post = allPosts.find((p) => p.id === postId) || { id: postId, latitude: lat, longitude: lng };
+      await ensureMapModeForReportFocus();
       openPostOnMap(post);
       const mapEl = document.getElementById("map");
       if (mapEl) {
@@ -2233,6 +2286,13 @@ async function initMap() {
   const satelliteLabelsLayer = layerSet.satelliteLabelsLayer;
   const connectivityBaseLayer = layerSet.connectivityBaseLayer;
   const protestBaseLayer = layerSet.protestBaseLayer;
+  mainBaseLayers = {
+    streetsLayer,
+    satelliteLayer,
+    satelliteLabelsLayer,
+    connectivityBaseLayer,
+    protestBaseLayer,
+  };
 
   streetsLayer.addTo(map);
   L.control
@@ -2364,7 +2424,7 @@ async function initMap() {
     const lng = event.latlng.lng.toFixed(6);
     const newUrl = mapEl.dataset.newUrl;
 
-    const popup = L.popup({ maxWidth: 260 })
+    const popup = L.popup(MAP_POPUP_OPTIONS)
       .setLatLng(event.latlng)
       .setContent(`
         <div style="color:#111;max-width:240px;">

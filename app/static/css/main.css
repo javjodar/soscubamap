@@ -189,7 +189,7 @@ h3 {
 
 .map-wrap {
   margin: 32px 0;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   z-index: 1;
 }
@@ -386,6 +386,17 @@ h3 {
 .map-canvas .gm-style .gm-style-iw-c.iw-fade.iw-fade-in,
 .map-canvas .gm-style .gm-style-iw-t.iw-fade.iw-fade-in {
   opacity: 1;
+}
+
+.map-canvas .leaflet-popup-content-wrapper {
+  max-height: min(48vh, 340px);
+  overflow: hidden;
+}
+
+.map-canvas .leaflet-popup-content {
+  max-height: calc(min(48vh, 340px) - 24px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .map-hint {
@@ -823,6 +834,21 @@ h3 {
 .protest-source-credit {
   color: #ffb998;
   font-size: 11px;
+}
+
+.protest-fire-icon-wrap {
+  background: transparent;
+  border: none;
+}
+
+.protest-fire-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 21px;
+  line-height: 1;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px var(--protest-fire-color, #ef6c00));
 }
 
 .pin-icon {
