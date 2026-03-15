@@ -17,6 +17,25 @@ PROVINCES = [
     "Isla de la Juventud",
 ]
 
+PROVINCE_RADAR_GEOIDS = {
+    "Pinar del Río": 3544088,
+    "Artemisa": 7668824,
+    "La Habana": 3564073,
+    "Mayabeque": 7668827,
+    "Matanzas": 3547394,
+    "Cienfuegos": 3564120,
+    "Villa Clara": 3534168,
+    "Sancti Spíritus": 3540665,
+    "Ciego de Ávila": 3564175,
+    "Camagüey": 3566062,
+    "Las Tunas": 3550595,
+    "Holguín": 3556965,
+    "Granma": 3558052,
+    "Santiago de Cuba": 3536725,
+    "Guantánamo": 3557685,
+    "Isla de la Juventud": 3556608,
+}
+
 MUNICIPALITIES = {
     "Pinar del Río": [
         "Pinar del Río",

@@ -20,6 +20,12 @@ DEFAULT_CATEGORIES = [
     ("Estacion de Policia", "estacion-policia", "Unidades policiales y puestos."),
     ("Escuela del Partido Comunista", "escuela-pcc", "Instituciones de formacion del PCC."),
     ("Sede del Partido Comunista", "sede-pcc", "Sedes provinciales o municipales del PCC."),
+    ("Sede del Gobierno", "sede-gobierno", "Sedes provinciales o municipales del Gobierno."),
+    (
+        "Sede de la Unión de Jóvenes Comunistas",
+        "sede-ujc",
+        "Sedes provinciales o municipales de la UJC.",
+    ),
     ("Sede de la Seguridad del Estado", "sede-seguridad-estado", "Instalaciones de la Seguridad del Estado."),
     ("Unidad militar", "unidad-militar", "Bases y unidades militares."),
     ("Base de espionaje", "base-espionaje", "Infraestructura de inteligencia o espionaje."),

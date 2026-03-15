@@ -1,10 +1,13 @@
 from flask import jsonify, request, make_response, session, current_app
 import math
 import json
+import os
 import secrets
+import unicodedata
 from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 from flask_login import current_user
+import requests
 
 from app.extensions import db, limiter
 from app.services.input_safety import has_malicious_input
@@ -30,6 +33,28 @@ from app.models.discussion_comment import DiscussionComment
 from app.models.push_subscription import PushSubscription
 from app.models.vote_record import VoteRecord
 from app.services.vote_identity import get_voter_hash
+from app.models.connectivity_snapshot import ConnectivitySnapshot
+from app.models.connectivity_ingestion_run import ConnectivityIngestionRun
+from app.models.connectivity_province_status import ConnectivityProvinceStatus
+from app.services.connectivity import (
+    STATUS_CRITICAL,
+    STATUS_COLORS,
+    STATUS_LABELS,
+    STATUS_UNKNOWN,
+    extract_series_points,
+    get_latest_hourly_point,
+    score_to_status,
+    serialize_snapshot_time,
+    to_float,
+)
+from app.services.connectivity_geo import (
+    diagnose_province_geojson,
+    enrich_geojson_with_status,
+    load_province_geojson,
+    province_names_from_geojson,
+)
+from app.services.geo_lookup import list_provinces
+from app.services.cuba_locations import PROVINCES
 
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
@@ -69,6 +94,502 @@ def _push_enabled() -> bool:
     )
 
 
+def _truthy_param(raw):
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _mask_secret(value):
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if len(text) <= 10:
+        return "*" * len(text)
+    return f"{text[:4]}...{text[-4:]}"
+
+
+def _normalize_text_key(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _canonical_province_name(value):
+    key = _normalize_text_key(value)
+    if not key:
+        return ""
+    canonical_map = {_normalize_text_key(name): name for name in PROVINCES}
+    return canonical_map.get(key, str(value or "").strip())
+
+
+def _cf_api_token():
+    return (current_app.config.get("CF_API_TOKEN") or os.getenv("CF_API_TOKEN") or "").strip()
+
+
+def _connectivity_payload_summary(payload):
+    if not isinstance(payload, dict):
+        return {
+            "parse_ok": False,
+            "main_points": 0,
+            "previous_points": 0,
+            "latest_main": None,
+            "latest_previous": None,
+            "latest_main_hourly": None,
+        }
+
+    provinces = payload.get("provinces")
+    if isinstance(provinces, dict):
+        province_summaries = {}
+        ok_count = 0
+        latest_points = []
+        for province, details in provinces.items():
+            province_payload = (details or {}).get("payload")
+            summary = _connectivity_payload_summary(province_payload)
+            province_summaries[province] = {
+                "main_points": summary.get("main_points", 0),
+                "latest_main_hourly": summary.get("latest_main_hourly"),
+            }
+            if summary.get("main_points"):
+                ok_count += 1
+            latest_main_hourly = summary.get("latest_main_hourly")
+            if latest_main_hourly and latest_main_hourly.get("timestamp_utc"):
+                latest_points.append(latest_main_hourly.get("timestamp_utc"))
+        return {
+            "parse_ok": True,
+            "mode": payload.get("mode") or "province_geoid_v1",
+            "province_count": len(provinces),
+            "provinces_with_data": ok_count,
+            "latest_hourly_timestamp_utc": max(latest_points) if latest_points else None,
+            "provinces": province_summaries,
+        }
+
+    main_points = extract_series_points(payload, "main")
+    previous_points = extract_series_points(payload, "previous")
+    latest_main = main_points[-1] if main_points else None
+    latest_previous = previous_points[-1] if previous_points else None
+    latest_main_hourly = get_latest_hourly_point(payload, "main")
+
+    def _serialize_point(point):
+        if not point:
+            return None
+        return {
+            "timestamp_utc": serialize_snapshot_time(point.get("timestamp")),
+            "value": point.get("value"),
+        }
+
+    return {
+        "parse_ok": True,
+        "main_points": len(main_points),
+        "previous_points": len(previous_points),
+        "latest_main": _serialize_point(latest_main),
+        "latest_previous": _serialize_point(latest_previous),
+        "latest_main_hourly": _serialize_point(latest_main_hourly),
+    }
+
+
+def _serialize_timeseries_point(point):
+    if not point:
+        return None
+    return {
+        "timestamp_utc": serialize_snapshot_time(point.get("timestamp")),
+        "value": to_float(point.get("value")),
+    }
+
+
+def _latest_successful_connectivity_run():
+    return (
+        ConnectivityIngestionRun.query.filter(
+            ConnectivityIngestionRun.status == "success",
+            ConnectivityIngestionRun.payload_json.isnot(None),
+            ConnectivityIngestionRun.payload_json != "",
+        )
+        .order_by(
+            ConnectivityIngestionRun.started_at_utc.desc(),
+            ConnectivityIngestionRun.id.desc(),
+        )
+        .first()
+    )
+
+
+def _compute_window_summary_from_payload(payload, hours):
+    main_points_all = extract_series_points(payload, "main")
+    previous_points_all = extract_series_points(payload, "previous")
+    if not main_points_all:
+        return {
+            "available": False,
+            "reason": "La serie main no contiene puntos.",
+            "window_hours": hours,
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    latest_ts = main_points_all[-1].get("timestamp")
+    window_start = latest_ts - timedelta(hours=hours) if latest_ts else None
+    main_points = [
+        item
+        for item in main_points_all
+        if item.get("timestamp") is not None and (window_start is None or item.get("timestamp") >= window_start)
+    ]
+    if not main_points:
+        main_points = main_points_all[-hours:]
+
+    previous_aligned = []
+    if previous_points_all and main_points:
+        align_count = min(len(previous_points_all), len(main_points))
+        prev_tail = previous_points_all[-align_count:]
+        main_tail = main_points[-align_count:]
+        for main_item, prev_item in zip(main_tail, prev_tail):
+            previous_aligned.append(
+                {
+                    "timestamp": main_item.get("timestamp"),
+                    "value": to_float(prev_item.get("value")),
+                }
+            )
+
+    main_values = [to_float(item.get("value")) for item in main_points]
+    main_values = [value for value in main_values if value is not None]
+
+    latest_main_value = to_float(main_points[-1].get("value")) if main_points else None
+    latest_previous_value = (
+        to_float(previous_aligned[-1].get("value")) if previous_aligned else None
+    )
+
+    delta_pct = None
+    if (
+        latest_main_value is not None
+        and latest_previous_value is not None
+        and latest_previous_value > 0
+    ):
+        delta_pct = ((latest_main_value - latest_previous_value) / latest_previous_value) * 100.0
+
+    peak_main_value = max(main_values) if main_values else None
+    min_main_value = min(main_values) if main_values else None
+    avg_main_value = (sum(main_values) / len(main_values)) if main_values else None
+
+    score_method = "blended_latest_avg_worst_from_main_peak_ratio_pct_v1"
+    max_drop_from_peak_pct = None
+    if (
+        peak_main_value is not None
+        and min_main_value is not None
+        and peak_main_value > 0
+    ):
+        max_drop_from_peak_pct = ((peak_main_value - min_main_value) / peak_main_value) * 100.0
+
+    score_latest_pct = None
+    score_avg_pct = None
+    score_worst_pct = None
+    score_window_pct = None
+    if min_main_value is not None and peak_main_value is not None:
+        if peak_main_value > 0:
+            if latest_main_value is not None:
+                score_latest_pct = (latest_main_value / peak_main_value) * 100.0
+                score_latest_pct = max(0.0, min(score_latest_pct, 100.0))
+            if avg_main_value is not None:
+                score_avg_pct = (avg_main_value / peak_main_value) * 100.0
+                score_avg_pct = max(0.0, min(score_avg_pct, 100.0))
+            score_worst_pct = (min_main_value / peak_main_value) * 100.0
+            score_worst_pct = max(0.0, min(score_worst_pct, 100.0))
+        elif peak_main_value == 0 and min_main_value == 0:
+            score_latest_pct = 0.0
+            score_avg_pct = 0.0
+            score_worst_pct = 0.0
+
+    weighted_parts = []
+    if score_latest_pct is not None:
+        weighted_parts.append((score_latest_pct, 0.55))
+    if score_avg_pct is not None:
+        weighted_parts.append((score_avg_pct, 0.30))
+    if score_worst_pct is not None:
+        weighted_parts.append((score_worst_pct, 0.15))
+    if weighted_parts:
+        total_weight = sum(weight for _, weight in weighted_parts)
+        score_window_pct = sum(value * weight for value, weight in weighted_parts) / total_weight
+        score_window_pct = max(0.0, min(score_window_pct, 100.0))
+
+    return {
+        "available": bool(main_points),
+        "window_hours": hours,
+        "score_method": score_method,
+        "latest_timestamp_utc": serialize_snapshot_time(main_points[-1].get("timestamp")) if main_points else None,
+        "latest_main_value": latest_main_value,
+        "latest_previous_value": latest_previous_value,
+        "delta_pct": delta_pct,
+        "peak_main_value": peak_main_value,
+        "min_main_value": min_main_value,
+        "avg_main_value": avg_main_value,
+        "max_drop_from_peak_pct": max_drop_from_peak_pct,
+        "score_latest_pct": score_latest_pct,
+        "score_avg_pct": score_avg_pct,
+        "score_worst_pct": score_worst_pct,
+        "score_window_pct": score_window_pct,
+        "series_main": [
+            point for point in (_serialize_timeseries_point(item) for item in main_points) if point
+        ],
+        "series_previous_aligned": [
+            point
+            for point in (_serialize_timeseries_point(item) for item in previous_aligned)
+            if point
+        ],
+    }
+
+
+def _average_serialized_series(series_groups):
+    buckets = {}
+    for series in series_groups or []:
+        for point in series or []:
+            timestamp = point.get("timestamp_utc")
+            value = to_float(point.get("value"))
+            if not timestamp or value is None:
+                continue
+            buckets.setdefault(timestamp, []).append(value)
+    points = []
+    for timestamp in sorted(buckets.keys()):
+        values = buckets[timestamp]
+        points.append({"timestamp_utc": timestamp, "value": sum(values) / len(values)})
+    return points
+
+
+def _build_http_requests_window_summary(window_hours=24):
+    try:
+        hours = int(window_hours)
+    except Exception:
+        hours = 24
+    hours = max(1, min(hours, 48))
+
+    run = _latest_successful_connectivity_run()
+    if not run or not run.payload_json:
+        return {
+            "available": False,
+            "reason": "No hay ingestas exitosas con payload.",
+            "window_hours": hours,
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    try:
+        payload = json.loads(run.payload_json)
+    except Exception as exc:
+        return {
+            "available": False,
+            "reason": f"Payload de ingesta invalido: {exc}",
+            "window_hours": hours,
+            "source_run_id": run.id,
+            "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+            "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+            "series_main": [],
+            "series_previous_aligned": [],
+        }
+
+    provinces = payload.get("provinces")
+    if isinstance(provinces, dict):
+        by_province = {}
+        for raw_province, details in provinces.items():
+            province_name = _canonical_province_name(raw_province)
+            province_payload = (details or {}).get("payload")
+            summary = _compute_window_summary_from_payload(province_payload, hours)
+            summary["geo_id"] = (details or {}).get("geo_id")
+            by_province[province_name] = summary
+
+        available_province_items = [
+            item for item in by_province.values() if item.get("available")
+        ]
+        if not available_province_items:
+            return {
+                "available": False,
+                "reason": "No hay series provinciales con datos.",
+                "window_hours": hours,
+                "source_run_id": run.id,
+                "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+                "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+                "series_main": [],
+                "series_previous_aligned": [],
+                "by_province": by_province,
+            }
+
+        main_series_avg = _average_serialized_series(
+            [item.get("series_main") for item in available_province_items]
+        )
+        prev_series_avg = _average_serialized_series(
+            [item.get("series_previous_aligned") for item in available_province_items]
+        )
+        main_values = [to_float(point.get("value")) for point in main_series_avg]
+        main_values = [value for value in main_values if value is not None]
+
+        latest_main_value = (
+            to_float(main_series_avg[-1].get("value")) if main_series_avg else None
+        )
+        latest_previous_value = (
+            to_float(prev_series_avg[-1].get("value")) if prev_series_avg else None
+        )
+        delta_pct = None
+        if (
+            latest_main_value is not None
+            and latest_previous_value is not None
+            and latest_previous_value > 0
+        ):
+            delta_pct = (
+                (latest_main_value - latest_previous_value) / latest_previous_value
+            ) * 100.0
+
+        peak_main_value = max(main_values) if main_values else None
+        min_main_value = min(main_values) if main_values else None
+        avg_main_value = (sum(main_values) / len(main_values)) if main_values else None
+
+        score_latest_pct = None
+        score_avg_pct = None
+        score_worst_pct = None
+        if min_main_value is not None and peak_main_value is not None:
+            if peak_main_value > 0:
+                if latest_main_value is not None:
+                    score_latest_pct = (latest_main_value / peak_main_value) * 100.0
+                if avg_main_value is not None:
+                    score_avg_pct = (avg_main_value / peak_main_value) * 100.0
+                score_worst_pct = (min_main_value / peak_main_value) * 100.0
+            elif peak_main_value == 0 and min_main_value == 0:
+                score_latest_pct = 0.0
+                score_avg_pct = 0.0
+                score_worst_pct = 0.0
+
+        score_latest_pct = (
+            max(0.0, min(score_latest_pct, 100.0))
+            if score_latest_pct is not None
+            else None
+        )
+        score_avg_pct = (
+            max(0.0, min(score_avg_pct, 100.0))
+            if score_avg_pct is not None
+            else None
+        )
+        score_worst_pct = (
+            max(0.0, min(score_worst_pct, 100.0))
+            if score_worst_pct is not None
+            else None
+        )
+        score_window_pct = _average_numeric(
+            [item.get("score_window_pct") for item in available_province_items]
+        )
+        if score_window_pct is None:
+            score_window_pct = _average_numeric(
+                [item.get("score_worst_pct") for item in available_province_items]
+            )
+
+        max_drop_from_peak_pct = None
+        if (
+            peak_main_value is not None
+            and min_main_value is not None
+            and peak_main_value > 0
+        ):
+            max_drop_from_peak_pct = (
+                (peak_main_value - min_main_value) / peak_main_value
+            ) * 100.0
+
+        latest_candidates = [
+            item.get("latest_timestamp_utc")
+            for item in available_province_items
+            if item.get("latest_timestamp_utc")
+        ]
+
+        return {
+            "available": bool(main_series_avg),
+            "window_hours": hours,
+            "score_method": "blended_latest_avg_worst_from_main_peak_ratio_pct_v1",
+            "source_run_id": run.id,
+            "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+            "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+            "latest_timestamp_utc": (
+                main_series_avg[-1].get("timestamp_utc")
+                if main_series_avg
+                else (max(latest_candidates) if latest_candidates else None)
+            ),
+            "latest_main_value": latest_main_value,
+            "latest_previous_value": latest_previous_value,
+            "delta_pct": delta_pct,
+            "peak_main_value": peak_main_value,
+            "min_main_value": min_main_value,
+            "avg_main_value": avg_main_value,
+            "max_drop_from_peak_pct": max_drop_from_peak_pct,
+            "score_latest_pct": score_latest_pct,
+            "score_avg_pct": score_avg_pct,
+            "score_worst_pct": score_worst_pct,
+            "score_window_pct": score_window_pct,
+            "series_main": main_series_avg,
+            "series_previous_aligned": prev_series_avg,
+            "by_province": by_province,
+            "province_count": len(by_province),
+            "provinces_with_data": len(available_province_items),
+        }
+
+    summary = _compute_window_summary_from_payload(payload, hours)
+    summary.update(
+        {
+            "source_run_id": run.id,
+            "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
+            "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+        }
+    )
+    return summary
+
+
+def _build_http_requests_24h_summary():
+    return _build_http_requests_window_summary(24)
+
+
+def _cloudflare_probe():
+    api_url = (current_app.config.get("CLOUDFLARE_RADAR_HTTP_TIMESERIES_URL") or "").strip()
+    timeout_seconds = int(current_app.config.get("CONNECTIVITY_FETCH_TIMEOUT_SECONDS", 30))
+    token = _cf_api_token()
+
+    result = {
+        "requested_at_utc": serialize_snapshot_time(datetime.utcnow()),
+        "api_url": api_url,
+        "timeout_seconds": timeout_seconds,
+        "token_configured": bool(token),
+        "token_preview": _mask_secret(token),
+        "http_status": None,
+        "request_ok": False,
+        "cloudflare_success": None,
+        "errors": None,
+        "payload_summary": None,
+        "error": None,
+    }
+
+    if not api_url:
+        result["error"] = "CLOUDFLARE_RADAR_HTTP_TIMESERIES_URL no configurado"
+        return result
+    if not token:
+        result["error"] = "CF_API_TOKEN no configurado"
+        return result
+
+    try:
+        response = requests.get(
+            api_url,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            timeout=timeout_seconds,
+        )
+        result["http_status"] = response.status_code
+        result["request_ok"] = bool(response.ok)
+
+        payload = None
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        if isinstance(payload, dict):
+            result["cloudflare_success"] = payload.get("success")
+            result["errors"] = payload.get("errors")
+            result["payload_summary"] = _connectivity_payload_summary(payload)
+            if not response.ok and not result["errors"]:
+                result["error"] = (response.text or "").strip()[:400]
+        else:
+            result["error"] = "Respuesta no JSON o invalida"
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
+
+
 def _apply_vote(record, value):
     if value == 1:
         record.upvotes = (record.upvotes or 0) + 1
@@ -97,9 +618,476 @@ def _get_verified_post_ids(post_ids):
     return {row.target_id for row in rows}
 
 
+def _average_numeric(values):
+    numeric = [to_float(value) for value in (values or [])]
+    numeric = [value for value in numeric if value is not None]
+    if not numeric:
+        return None
+    return sum(numeric) / len(numeric)
+
+
+def _minimum_numeric(values):
+    numeric = [to_float(value) for value in (values or [])]
+    numeric = [value for value in numeric if value is not None]
+    if not numeric:
+        return None
+    return min(numeric)
+
+
+def _parse_connectivity_window_hours():
+    raw = (request.args.get("window_hours") or "").strip()
+    if not raw:
+        return 24
+    try:
+        value = int(raw)
+    except Exception:
+        return 24
+    if value in (2, 6, 24):
+        return value
+    return 24
+
+
 @api_bp.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@api_bp.route("/connectivity/latest")
+@limiter.limit("120/minute")
+def connectivity_latest():
+    now = datetime.utcnow()
+    stale_after_hours = int(current_app.config.get("CONNECTIVITY_STALE_AFTER_HOURS", 8))
+    stale_threshold = timedelta(hours=max(stale_after_hours, 1))
+    window_hours = _parse_connectivity_window_hours()
+    window_start = now - timedelta(hours=window_hours)
+    window_aggregation = "worst"
+    http_requests_window = _build_http_requests_window_summary(window_hours)
+
+    snapshot = (
+        ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
+        .order_by(ConnectivitySnapshot.observed_at_utc.desc(), ConnectivitySnapshot.id.desc())
+        .first()
+    )
+    window_snapshots = (
+        ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
+        .filter(
+            ConnectivitySnapshot.observed_at_utc >= window_start,
+            ConnectivitySnapshot.observed_at_utc <= now,
+        )
+        .order_by(ConnectivitySnapshot.observed_at_utc.asc(), ConnectivitySnapshot.id.asc())
+        .all()
+    )
+
+    geojson = load_province_geojson()
+    try:
+        province_names = set(list_provinces() or [])
+    except Exception:
+        province_names = set(PROVINCES)
+    if not province_names:
+        province_names = set(PROVINCES)
+    province_names.update(province_names_from_geojson(geojson))
+
+    national_score = None
+    national_status = STATUS_UNKNOWN
+    national_confidence = "unknown"
+    stale = True
+    partial = True
+    snapshot_payload = None
+    status_by_province = {}
+    window_payload = {
+        "hours": window_hours,
+        "aggregation": window_aggregation,
+        "start_utc": serialize_snapshot_time(window_start),
+        "end_utc": serialize_snapshot_time(now),
+        "snapshot_count": 0,
+        "national_score": None,
+        "national_status": STATUS_UNKNOWN,
+        "national_status_label": STATUS_LABELS.get(STATUS_UNKNOWN, "Sin datos"),
+    }
+
+    if snapshot:
+        stale = not snapshot.fetched_at_utc or (now - snapshot.fetched_at_utc) > stale_threshold
+        snapshot_payload = {
+            "id": snapshot.id,
+            "observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+            "fetched_at_utc": serialize_snapshot_time(snapshot.fetched_at_utc),
+            "traffic_value": snapshot.traffic_value,
+            "baseline_value": snapshot.baseline_value,
+            "score": snapshot.score,
+            "status": score_to_status(snapshot.score),
+            "status_label": STATUS_LABELS.get(
+                score_to_status(snapshot.score), STATUS_LABELS[STATUS_UNKNOWN]
+            ),
+            "is_partial": bool(snapshot.is_partial),
+            "stale": stale,
+            "confidence": snapshot.confidence or "country_level",
+        }
+
+    window_score = None
+    if isinstance(http_requests_window, dict) and http_requests_window.get("available"):
+        window_score = to_float(http_requests_window.get("score_window_pct"))
+        if window_score is None:
+            window_score = to_float(http_requests_window.get("score_worst_pct"))
+    window_by_province = {}
+    if isinstance(http_requests_window, dict):
+        raw_by_province = http_requests_window.get("by_province") or {}
+        if isinstance(raw_by_province, dict):
+            for raw_name, summary in raw_by_province.items():
+                canonical_name = _canonical_province_name(raw_name)
+                if canonical_name:
+                    window_by_province[canonical_name] = summary
+    window_series_main = (
+        (http_requests_window.get("series_main") or [])
+        if isinstance(http_requests_window, dict)
+        else []
+    )
+    window_latest_utc = (
+        (window_series_main[-1].get("timestamp_utc") if window_series_main else None)
+        or (
+            http_requests_window.get("latest_timestamp_utc")
+            if isinstance(http_requests_window, dict)
+            else None
+        )
+    )
+    window_start_utc = (
+        window_series_main[0].get("timestamp_utc")
+        if window_series_main
+        else serialize_snapshot_time(window_start)
+    )
+    window_end_utc = window_latest_utc or serialize_snapshot_time(now)
+
+    if window_by_province:
+        province_scores = []
+        province_available_count = 0
+        for province, summary in window_by_province.items():
+            province_names.add(province)
+            province_score = to_float(summary.get("score_window_pct"))
+            if province_score is None:
+                province_score = to_float(summary.get("score_worst_pct"))
+            if province_score is None:
+                continue
+            province_available_count += 1
+            province_scores.append(province_score)
+            status_key = score_to_status(province_score)
+            status_by_province[province] = {
+                "province": province,
+                "score": province_score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": "province_level_radar_estimated",
+                "is_estimated": False,
+            }
+
+        national_score = window_score if window_score is not None else _average_numeric(province_scores)
+        national_status = score_to_status(national_score)
+        national_confidence = "province_level_radar_aggregate"
+        partial = province_available_count < len(window_by_province)
+
+        window_payload.update(
+            {
+                "aggregation": "blended_http_series",
+                "score_method": http_requests_window.get("score_method")
+                or "blended_latest_avg_worst_from_main_peak_ratio_pct_v1",
+                "snapshot_count": len(window_snapshots),
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "start_utc": window_start_utc,
+                "end_utc": window_end_utc,
+                "latest_observed_at_utc": window_latest_utc,
+                "http_series_points": len(window_series_main),
+                "max_drop_from_peak_pct": http_requests_window.get(
+                    "max_drop_from_peak_pct"
+                ),
+                "province_count": len(window_by_province),
+                "provinces_with_data": province_available_count,
+                "province_data_source": "radar_geoid",
+            }
+        )
+    elif window_snapshots:
+        national_window_scores = [item.score for item in window_snapshots]
+        if window_aggregation == "worst":
+            national_score = _minimum_numeric(national_window_scores)
+        else:
+            national_score = _average_numeric(national_window_scores)
+
+        national_status = score_to_status(national_score)
+        national_confidence = "window_worst_country_level"
+        partial = bool(any(item.is_partial for item in window_snapshots))
+
+        province_score_map = {}
+        for snap in window_snapshots:
+            for row in snap.provinces:
+                province_score_map.setdefault(row.province, []).append(row.score)
+                province_names.add(row.province)
+
+        for province, scores in province_score_map.items():
+            if window_aggregation == "worst":
+                province_score = _minimum_numeric(scores)
+            else:
+                province_score = _average_numeric(scores)
+            status_key = score_to_status(province_score)
+            status_by_province[province] = {
+                "province": province,
+                "score": province_score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": "window_worst_estimated_country_level",
+                "is_estimated": True,
+            }
+
+        window_payload.update(
+            {
+                "snapshot_count": len(window_snapshots),
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "latest_observed_at_utc": serialize_snapshot_time(
+                    window_snapshots[-1].observed_at_utc
+                ),
+                "start_utc": serialize_snapshot_time(window_start),
+                "end_utc": serialize_snapshot_time(now),
+            }
+        )
+    elif window_score is not None:
+        national_score = window_score
+        national_status = score_to_status(window_score)
+        national_confidence = "window_blended_http_series_country_level"
+        partial = bool(snapshot.is_partial) if snapshot else False
+
+        window_payload.update(
+            {
+                "aggregation": "blended_http_series",
+                "score_method": http_requests_window.get("score_method")
+                or "blended_latest_avg_worst_from_main_peak_ratio_pct_v1",
+                "snapshot_count": len(window_snapshots),
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "start_utc": window_start_utc,
+                "end_utc": window_end_utc,
+                "latest_observed_at_utc": window_latest_utc,
+                "http_series_points": len(window_series_main),
+                "max_drop_from_peak_pct": http_requests_window.get(
+                    "max_drop_from_peak_pct"
+                ),
+            }
+        )
+    elif snapshot:
+        national_score = snapshot.score
+        national_status = score_to_status(snapshot.score)
+        national_confidence = snapshot.confidence or "country_level"
+        partial = bool(snapshot.is_partial)
+
+        for row in snapshot.provinces:
+            status_key = score_to_status(row.score)
+            status_by_province[row.province] = {
+                "province": row.province,
+                "score": row.score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": row.confidence or "estimated_country_level",
+                "is_estimated": True,
+            }
+            province_names.add(row.province)
+
+        window_payload.update(
+            {
+                "snapshot_count": 1,
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "latest_observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+                "start_utc": serialize_snapshot_time(window_start),
+                "end_utc": serialize_snapshot_time(now),
+            }
+        )
+
+    province_items = []
+    for province in sorted(province_names):
+        state = status_by_province.get(province)
+        if not state:
+            status_key = national_status if national_score is not None else STATUS_UNKNOWN
+            state = {
+                "province": province,
+                "score": national_score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": national_confidence,
+                "is_estimated": True,
+            }
+            status_by_province[province] = state
+        province_items.append(state)
+
+    enriched_geojson = enrich_geojson_with_status(geojson, status_by_province)
+    http_requests_24h = (
+        http_requests_window
+        if window_hours == 24
+        else _build_http_requests_24h_summary()
+    )
+
+    return jsonify(
+        {
+            "snapshot": snapshot_payload,
+            "stale": stale,
+            "is_partial": partial,
+            "has_geojson": bool((enriched_geojson.get("features") or [])),
+            "provinces": province_items,
+            "geojson": enriched_geojson,
+            "window": window_payload,
+            "http_requests_window": http_requests_window,
+            "http_requests_window_by_province": window_by_province,
+            "http_requests_24h": http_requests_24h,
+            "source": {
+                "name": "Cloudflare Radar",
+                "url": "https://radar.cloudflare.com/",
+                "label": "Hecho con tecnologia de Cloudflare Radar",
+            },
+            "refresh_seconds": int(current_app.config.get("CONNECTIVITY_FRONTEND_REFRESH_SECONDS", 300)),
+        }
+    )
+
+
+@api_bp.route("/connectivity/debug")
+@limiter.limit("30/minute")
+def connectivity_debug():
+    if not _is_admin_user():
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    now = datetime.utcnow()
+    debug_window_hours = _parse_connectivity_window_hours()
+    stale_after_hours = int(current_app.config.get("CONNECTIVITY_STALE_AFTER_HOURS", 8))
+    stale_threshold = timedelta(hours=max(stale_after_hours, 1))
+
+    snapshot = (
+        ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
+        .order_by(ConnectivitySnapshot.observed_at_utc.desc(), ConnectivitySnapshot.id.desc())
+        .first()
+    )
+    latest_runs = (
+        ConnectivityIngestionRun.query.order_by(
+            ConnectivityIngestionRun.started_at_utc.desc(),
+            ConnectivityIngestionRun.id.desc(),
+        )
+        .limit(10)
+        .all()
+    )
+
+    geojson = load_province_geojson()
+    geojson_names = set(province_names_from_geojson(geojson))
+    geo_diagnostic = diagnose_province_geojson()
+
+    snapshot_payload = None
+    snapshot_stale = True
+    province_rows = []
+    if snapshot:
+        snapshot_stale = not snapshot.fetched_at_utc or (now - snapshot.fetched_at_utc) > stale_threshold
+        province_rows = list(snapshot.provinces or [])
+        snapshot_payload = {
+            "id": snapshot.id,
+            "observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+            "fetched_at_utc": serialize_snapshot_time(snapshot.fetched_at_utc),
+            "traffic_value": snapshot.traffic_value,
+            "baseline_value": snapshot.baseline_value,
+            "score": snapshot.score,
+            "status": snapshot.status,
+            "is_partial": bool(snapshot.is_partial),
+            "confidence": snapshot.confidence,
+            "method": snapshot.method,
+            "stale": snapshot_stale,
+            "province_rows_count": len(province_rows),
+        }
+
+    province_status_names = {row.province for row in province_rows if row.province}
+    missing_geo_for_status = sorted(province_status_names - geojson_names)
+    missing_status_for_geo = sorted(geojson_names - province_status_names)
+
+    runs_payload = []
+    for run in latest_runs:
+        payload_summary = None
+        payload_parse_error = None
+        if run.payload_json:
+            try:
+                payload_obj = json.loads(run.payload_json)
+                payload_summary = _connectivity_payload_summary(payload_obj)
+            except Exception as exc:
+                payload_parse_error = str(exc)
+
+        runs_payload.append(
+            {
+                "id": run.id,
+                "status": run.status,
+                "attempt_count": run.attempt_count,
+                "scheduled_for_utc": serialize_snapshot_time(run.scheduled_for_utc),
+                "started_at_utc": serialize_snapshot_time(run.started_at_utc),
+                "finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
+                "error_message": (run.error_message or "")[:500] or None,
+                "payload_parse_error": payload_parse_error,
+                "payload_summary": payload_summary,
+            }
+        )
+
+    diagnostics = {
+        "generated_at_utc": serialize_snapshot_time(now),
+        "config": {
+            "api_url": current_app.config.get("CLOUDFLARE_RADAR_HTTP_TIMESERIES_URL"),
+            "cf_api_token_configured": bool(_cf_api_token()),
+            "cf_api_token_preview": _mask_secret(_cf_api_token()),
+            "connectivity_fetch_delay_seconds": int(current_app.config.get("CONNECTIVITY_FETCH_DELAY_SECONDS", 120)),
+            "connectivity_fetch_timeout_seconds": int(current_app.config.get("CONNECTIVITY_FETCH_TIMEOUT_SECONDS", 30)),
+            "connectivity_stale_after_hours": stale_after_hours,
+            "connectivity_frontend_refresh_seconds": int(
+                current_app.config.get("CONNECTIVITY_FRONTEND_REFRESH_SECONDS", 300)
+            ),
+        },
+        "geojson": {
+            "has_geojson_features": bool((geojson.get("features") or [])),
+            "geojson_feature_count": len(geojson.get("features") or []),
+            "geojson_province_name_count": len(geojson_names),
+            "diagnostic": geo_diagnostic,
+        },
+        "window_probe": {
+            "hours": debug_window_hours,
+            "http_requests_window": _build_http_requests_window_summary(debug_window_hours),
+        },
+        "snapshot": snapshot_payload,
+        "ingestion_runs": runs_payload,
+        "consistency": {
+            "status_provinces_without_geometry": missing_geo_for_status,
+            "geometry_provinces_without_status": missing_status_for_geo,
+            "status_geometry_overlap_count": len(province_status_names & geojson_names),
+            "likely_reasons_if_not_drawn": [
+                "No existe snapshot en BD" if not snapshot else None,
+                "Snapshot existe pero esta stale (sin datos recientes)" if snapshot_stale else None,
+                "GeoJSON provincial vacio o ruta incorrecta"
+                if not (geojson.get("features") or [])
+                else None,
+                "Nombres de provincias no coinciden entre BD y GeoJSON"
+                if province_rows and not (province_status_names & geojson_names)
+                else None,
+            ],
+        },
+    }
+    diagnostics["consistency"]["likely_reasons_if_not_drawn"] = [
+        item for item in diagnostics["consistency"]["likely_reasons_if_not_drawn"] if item
+    ]
+
+    if _truthy_param(request.args.get("probe")):
+        diagnostics["cloudflare_probe"] = _cloudflare_probe()
+
+    return jsonify(diagnostics)
 
 
 @api_bp.route("/push/subscribe", methods=["POST"])
@@ -338,6 +1326,115 @@ def _parse_date(value: str):
         return None
 
 
+def _build_connectivity_outage_events(start_dt, end_dt, province=""):
+    selected_province = (province or "").strip() or None
+
+    if selected_province:
+        base_query = db.session.query(
+            ConnectivitySnapshot.id.label("snapshot_id"),
+            ConnectivitySnapshot.observed_at_utc.label("observed_at_utc"),
+            ConnectivityProvinceStatus.status.label("status"),
+            ConnectivityProvinceStatus.score.label("score"),
+            ConnectivityProvinceStatus.province.label("province"),
+        ).join(
+            ConnectivityProvinceStatus,
+            ConnectivityProvinceStatus.snapshot_id == ConnectivitySnapshot.id,
+        ).filter(
+            ConnectivityProvinceStatus.province == selected_province,
+        )
+    else:
+        base_query = db.session.query(
+            ConnectivitySnapshot.id.label("snapshot_id"),
+            ConnectivitySnapshot.observed_at_utc.label("observed_at_utc"),
+            ConnectivitySnapshot.status.label("status"),
+            ConnectivitySnapshot.score.label("score"),
+        )
+
+    previous_point = (
+        base_query.filter(ConnectivitySnapshot.observed_at_utc < start_dt)
+        .order_by(ConnectivitySnapshot.observed_at_utc.desc(), ConnectivitySnapshot.id.desc())
+        .first()
+    )
+    points_in_range = (
+        base_query.filter(
+            ConnectivitySnapshot.observed_at_utc >= start_dt,
+            ConnectivitySnapshot.observed_at_utc <= end_dt,
+        )
+        .order_by(ConnectivitySnapshot.observed_at_utc.asc(), ConnectivitySnapshot.id.asc())
+        .all()
+    )
+
+    points = []
+    if previous_point:
+        points.append(previous_point)
+    points.extend(points_in_range)
+
+    if not points:
+        return {"events": [], "total": 0, "ongoing": 0}
+
+    def _is_critical(item):
+        return (getattr(item, "status", "") or "").strip().lower() == STATUS_CRITICAL
+
+    def _build_event_start(item):
+        start_raw = getattr(item, "observed_at_utc", None)
+        event = {
+            "started_at_utc": serialize_snapshot_time(start_raw),
+            "ended_at_utc": None,
+            "duration_minutes": None,
+            "ongoing": True,
+            "score_at_start": getattr(item, "score", None),
+            "score_at_end": None,
+            "start_snapshot_id": getattr(item, "snapshot_id", None),
+            "end_snapshot_id": None,
+            "province": getattr(item, "province", None) or selected_province,
+            "_start_dt": start_raw,
+        }
+        return event
+
+    events = []
+    open_event = None
+    prev = None
+    for point in points:
+        current_critical = _is_critical(point)
+        previous_critical = _is_critical(prev) if prev is not None else False
+
+        if current_critical and not previous_critical:
+            open_event = _build_event_start(point)
+        elif (not current_critical) and previous_critical and open_event is not None:
+            start_raw = open_event.get("_start_dt")
+            end_raw = getattr(point, "observed_at_utc", None)
+            duration_minutes = None
+            if start_raw and end_raw:
+                duration_minutes = max(int((end_raw - start_raw).total_seconds() // 60), 0)
+
+            open_event.update(
+                {
+                    "ended_at_utc": serialize_snapshot_time(end_raw),
+                    "duration_minutes": duration_minutes,
+                    "ongoing": False,
+                    "score_at_end": getattr(point, "score", None),
+                    "end_snapshot_id": getattr(point, "snapshot_id", None),
+                }
+            )
+            open_event.pop("_start_dt", None)
+            events.append(open_event)
+            open_event = None
+
+        prev = point
+
+    if open_event is not None:
+        open_event.pop("_start_dt", None)
+        events.append(open_event)
+
+    events = [event for event in events if event.get("started_at_utc")]
+    events.sort(key=lambda event: event.get("started_at_utc") or "", reverse=True)
+    return {
+        "events": events[:120],
+        "total": len(events),
+        "ongoing": len([event for event in events if event.get("ongoing")]),
+    }
+
+
 @api_bp.route("/v1/analytics")
 @limiter.limit("60/minute")
 def analytics_v1():
@@ -535,6 +1632,8 @@ def analytics_v1():
         .all()
     )
     edit_status_map = {status: count for status, count in edit_status_query}
+    connectivity_outages = _build_connectivity_outage_events(start_dt, end_dt, province=province)
+    connectivity_24h = _build_http_requests_24h_summary()
 
     return jsonify(
         {
@@ -563,6 +1662,8 @@ def analytics_v1():
                 "approved": edit_status_map.get("approved", 0),
                 "rejected": edit_status_map.get("rejected", 0),
             },
+            "connectivity_outages": connectivity_outages,
+            "connectivity_24h": connectivity_24h,
         }
     )
 

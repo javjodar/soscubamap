@@ -402,6 +402,244 @@ h3 {
   color: var(--accent);
 }
 
+.connectivity-legend-overlay {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: min(320px, calc(100% - 32px));
+  background: rgba(10, 16, 21, 0.94);
+  border: 1px solid rgba(214, 251, 231, 0.24);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+  z-index: 950;
+  display: grid;
+  gap: 7px;
+  max-height: min(74vh, 560px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.connectivity-legend-overlay[hidden] {
+  display: none !important;
+}
+
+.connectivity-legend-title {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #d6fbe7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.connectivity-window-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.connectivity-window-btn {
+  border: 1px solid rgba(214, 251, 231, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d6fbe7;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.connectivity-window-btn:hover {
+  border-color: rgba(214, 251, 231, 0.45);
+}
+
+.connectivity-window-btn.is-active {
+  background: rgba(110, 231, 183, 0.2);
+  border-color: rgba(110, 231, 183, 0.65);
+  color: #f3fff8;
+}
+
+.connectivity-legend-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #e8fff3;
+}
+
+.connectivity-legend-item .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.connectivity-legend-item .dot-normal {
+  background: #2e7d32;
+}
+
+.connectivity-legend-item .dot-degraded {
+  background: #f9a825;
+}
+
+.connectivity-legend-item .dot-severe {
+  background: #ef6c00;
+}
+
+.connectivity-legend-item .dot-critical {
+  background: #c62828;
+}
+
+.connectivity-updated {
+  margin-top: 4px;
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 6px;
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-source-credit {
+  color: #9ec4b8;
+  font-size: 11px;
+}
+
+.connectivity-traffic-panel {
+  margin-top: 4px;
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.connectivity-traffic-title {
+  color: #d6fbe7;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.connectivity-traffic-kpi {
+  color: #f3fff8;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.connectivity-traffic-meta {
+  display: grid;
+  gap: 2px;
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-sparkline {
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(214, 251, 231, 0.12);
+}
+
+.connectivity-sparkline .spark-prev,
+.connectivity-sparkline .spark-main {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.connectivity-sparkline .spark-prev {
+  stroke: rgba(249, 168, 37, 0.8);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+}
+
+.connectivity-sparkline .spark-main {
+  stroke: #6ee7b7;
+  stroke-width: 2.2;
+}
+
+.connectivity-traffic-note {
+  color: #9ec4b8;
+  font-size: 10px;
+}
+
+.connectivity-province-panel {
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.connectivity-province-head {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+}
+
+.connectivity-province-title {
+  color: #d6fbe7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.connectivity-province-status,
+.connectivity-province-range {
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-province-chart {
+  width: 100%;
+  height: 86px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(214, 251, 231, 0.12);
+}
+
+.connectivity-province-chart .spark-prev,
+.connectivity-province-chart .spark-main {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.connectivity-province-chart .spark-prev {
+  stroke: rgba(249, 168, 37, 0.8);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+}
+
+.connectivity-province-chart .spark-main {
+  stroke: #6ee7b7;
+  stroke-width: 2.2;
+}
+
+.connectivity-province-log {
+  display: grid;
+  gap: 6px;
+  max-height: none;
+  overflow: visible;
+}
+
+.connectivity-province-log-item {
+  border: 1px solid rgba(214, 251, 231, 0.15);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 2px;
+  font-size: 10px;
+  color: #d6fbe7;
+}
+
+.connectivity-province-log-empty {
+  border: 1px dashed rgba(214, 251, 231, 0.25);
+  border-radius: 8px;
+  padding: 8px;
+  color: #9ec4b8;
+  font-size: 10px;
+}
+
 .pin-icon {
   width: 34px;
   height: 34px;
@@ -2785,11 +3023,89 @@ textarea {
   text-transform: uppercase;
 }
 
+.analytics-kpi-line {
+  color: #b7ddd0;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
 .analytics-card canvas {
   width: 100% !important;
   flex: 1 1 auto;
   max-height: 240px;
   height: 240px !important;
+}
+
+.analytics-log-card {
+  height: auto;
+  min-height: 260px;
+}
+
+.analytics-log-summary {
+  color: #7fe7c0;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.analytics-log-list {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.analytics-log-item {
+  border: 1px solid rgba(110, 231, 183, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(8, 14, 12, 0.72);
+}
+
+.analytics-log-item.ongoing {
+  border-color: rgba(198, 40, 40, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(198, 40, 40, 0.28);
+}
+
+.analytics-log-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.analytics-log-state {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fca5a5;
+}
+
+.analytics-log-item.closed .analytics-log-state {
+  color: #9ef5cc;
+}
+
+.analytics-log-duration {
+  font-size: 12px;
+  color: #c9f7db;
+}
+
+.analytics-log-item-body {
+  display: grid;
+  gap: 4px;
+  color: #c9f7db;
+  font-size: 13px;
+}
+
+.analytics-log-empty {
+  color: #9ca3af;
+  font-size: 13px;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 10px;
+  padding: 12px;
 }
 
 .analytics-notes {
@@ -2836,6 +3152,20 @@ textarea {
     width: 100%;
     height: auto;
     aspect-ratio: 1 / 1;
+  }
+
+  .map-wrap {
+    overflow: visible;
+  }
+
+  .connectivity-legend-overlay {
+    position: static;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    margin-top: 12px;
+    max-height: min(56vh, 520px);
+    z-index: auto;
   }
 
 }

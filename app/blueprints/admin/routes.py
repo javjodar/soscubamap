@@ -1,8 +1,17 @@
-from flask import render_template, redirect, url_for, request, flash
+from flask import render_template, redirect, url_for, request, flash, current_app
 from flask_login import login_required
 
 from app.services.authz import role_required
 from app.services.settings import get_setting, set_setting
+from app.services.map_providers import (
+    MAP_PROVIDER_GOOGLE,
+    MAP_PROVIDER_LEAFLET,
+    get_map_provider_forms,
+    get_map_provider_main,
+    normalize_map_provider,
+    set_map_provider_forms,
+    set_map_provider_main,
+)
 from app.models.post import Post
 from app.models.discussion_post import DiscussionPost
 from app.models.discussion_comment import DiscussionComment
@@ -47,6 +56,8 @@ def _resolve_geo_location(lat, lng, province, municipality):
 @role_required("administrador")
 def dashboard():
     moderation_enabled = get_setting("moderation_enabled", "true") == "true"
+    map_provider_main = get_map_provider_main()
+    map_provider_forms = get_map_provider_forms()
     location_reports = (
         LocationReport.query.order_by(LocationReport.created_at.desc())
         .limit(10)
@@ -55,6 +66,11 @@ def dashboard():
     return render_template(
         "admin/dashboard.html",
         moderation_enabled=moderation_enabled,
+        map_provider_main=map_provider_main,
+        map_provider_forms=map_provider_forms,
+        provider_leaflet=MAP_PROVIDER_LEAFLET,
+        provider_google=MAP_PROVIDER_GOOGLE,
+        google_maps_configured=bool((current_app.config.get("GOOGLE_MAPS_API_KEY") or "").strip()),
         location_reports=location_reports,
     )
 
@@ -66,6 +82,25 @@ def toggle_moderation():
     enabled = request.form.get("moderation_enabled") == "on"
     set_setting("moderation_enabled", "true" if enabled else "false")
     flash("Moderación actualizada.", "success")
+    return redirect(url_for("admin.dashboard"))
+
+
+@admin_bp.route("/mapa-proveedor", methods=["POST"])
+@login_required
+@role_required("administrador")
+def update_map_providers():
+    main_provider = normalize_map_provider(
+        request.form.get("map_provider_main"),
+        MAP_PROVIDER_LEAFLET,
+    )
+    forms_provider = normalize_map_provider(
+        request.form.get("map_provider_forms"),
+        MAP_PROVIDER_LEAFLET,
+    )
+
+    set_map_provider_main(main_provider)
+    set_map_provider_forms(forms_provider)
+    flash("Proveedor de mapas actualizado.", "success")
     return redirect(url_for("admin.dashboard"))
 
 
@@ -438,6 +473,8 @@ def edit_report(post_id):
                 media_items=get_media_payload(post),
                 provinces=list_provinces(),
                 municipalities_map=municipalities_map(),
+                map_provider_forms=get_map_provider_forms(),
+                google_maps_api_key=(current_app.config.get("GOOGLE_MAPS_API_KEY") or "").strip(),
             )
 
         moderation_enabled = get_setting("moderation_enabled", "true") == "true"
@@ -523,6 +560,8 @@ def edit_report(post_id):
         media_items=get_media_payload(post),
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
+        map_provider_forms=get_map_provider_forms(),
+        google_maps_api_key=(current_app.config.get("GOOGLE_MAPS_API_KEY") or "").strip(),
         form_data=None,
         errors={},
         form_links=links,

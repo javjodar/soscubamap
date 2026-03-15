@@ -2,6 +2,35 @@ let map;
 let markers = [];
 let markerIndex = new Map();
 let shapeLayers = [];
+let connectivityGeoLayer;
+let connectivityRefreshTimer;
+let connectivityLastSnapshotId = null;
+let connectivityLastRenderKey = null;
+let connectivityRefreshSeconds = 300;
+let connectivityWindowHours = 24;
+let connectivityLastPayload = null;
+let selectedConnectivityProvince = "";
+let selectedConnectivityProvinceState = null;
+let activeBaseMode = "map";
+let mapHintElement;
+let reportLegendSection;
+let connectivityLegendOverlay;
+let connectivityUpdatedLabel;
+let connectivityTrafficPanel;
+let connectivityTrafficValue;
+let connectivityTrafficDelta;
+let connectivityTrafficDrop;
+let connectivityTrafficNote;
+let connectivitySparkMain;
+let connectivitySparkPrev;
+let connectivityWindowButtons = [];
+let connectivityProvincePanel;
+let connectivityProvinceTitle;
+let connectivityProvinceStatus;
+let connectivityProvinceRange;
+let connectivityProvinceChartMain;
+let connectivityProvinceChartPrev;
+let connectivityProvinceLog;
 let activePopup;
 let recentTimer;
 let searchMarker;
@@ -21,6 +50,92 @@ const CUBA_BOUNDS = {
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 const HAVANA_CENTER = [23.1136, -82.3666];
 const MOBILE_HAVANA_ZOOM = 9;
+const MAP_PROVIDER_LEAFLET = "leaflet";
+const MAP_PROVIDER_GOOGLE = "google";
+const CONNECTIVITY_STATUS_COLORS = {
+  normal: "#2E7D32",
+  degraded: "#F9A825",
+  severe: "#EF6C00",
+  critical: "#C62828",
+  unknown: "#667085",
+};
+const CONNECTIVITY_STATUS_LABELS = {
+  normal: "Normal",
+  degraded: "Degradacion leve",
+  severe: "Problemas severos",
+  critical: "Apagon o conectividad critica",
+  unknown: "Sin datos",
+};
+
+function canUseGoogleMutant(provider) {
+  if (provider !== MAP_PROVIDER_GOOGLE) return false;
+  return (
+    typeof L !== "undefined" &&
+    L.gridLayer &&
+    typeof L.gridLayer.googleMutant === "function" &&
+    typeof window.google !== "undefined" &&
+    window.google &&
+    window.google.maps
+  );
+}
+
+function buildMainBaseLayers(provider) {
+  const useGoogle = canUseGoogleMutant(provider);
+
+  if (useGoogle) {
+    const mapLayer = L.gridLayer.googleMutant({
+      type: "roadmap",
+      maxZoom: 20,
+    });
+    const satelliteLayer = L.gridLayer.googleMutant({
+      type: "hybrid",
+      maxZoom: 20,
+    });
+    const connectivityLayer = L.gridLayer.googleMutant({
+      type: "roadmap",
+      maxZoom: 20,
+    });
+    return {
+      useGoogle,
+      streetsLayer: mapLayer,
+      satelliteLayer,
+      satelliteLabelsLayer: null,
+      connectivityBaseLayer: connectivityLayer,
+    };
+  }
+
+  const streetsLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  });
+
+  const satelliteLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution:
+        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      maxZoom: 19,
+    }
+  );
+  const satelliteLabelsLayer = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution: "Labels &copy; Esri",
+      maxZoom: 19,
+    }
+  );
+  const connectivityBaseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  });
+  return {
+    useGoogle,
+    streetsLayer,
+    satelliteLayer,
+    satelliteLabelsLayer,
+    connectivityBaseLayer,
+  };
+}
 
 function cubaLatLngBounds() {
   return L.latLngBounds(
@@ -160,6 +275,8 @@ const CATEGORY_ICONS = {
   "estacion-policia": "fa-building-shield",
   "escuela-pcc": "fa-graduation-cap",
   "sede-pcc": "fa-people-group",
+  "sede-gobierno": "fa-building-columns",
+  "sede-ujc": "fa-flag",
   "sede-seguridad-estado": "fa-user-secret",
   "unidad-militar": "fa-person-military-pointing",
   "base-espionaje": "fa-satellite-dish",
@@ -168,6 +285,7 @@ const CATEGORY_ICONS = {
 
 const CATEGORY_IMAGES = {
   "sede-pcc": "/static/img/Communist_Party_of_Cuba_logo.svg.png",
+  "sede-ujc": "/static/img/ujc.png",
 };
 
 const ALERT_SLUGS = new Set(["accion-represiva", "movimiento-tropas", "desconexion-internet"]);
@@ -219,6 +337,120 @@ function closeActivePopup() {
   if (!map || !activePopup) return;
   map.closePopup(activePopup);
   activePopup = null;
+}
+
+function setMapHintVisible(visible) {
+  if (!mapHintElement) return;
+  mapHintElement.hidden = !visible;
+}
+
+function setReportLegendVisible(visible) {
+  if (!reportLegendSection) return;
+  reportLegendSection.hidden = !visible;
+}
+
+function setConnectivityLegendVisible(visible) {
+  if (!connectivityLegendOverlay) return;
+  connectivityLegendOverlay.hidden = !visible;
+}
+
+function setActiveConnectivityWindow(hours) {
+  const numeric = Number(hours);
+  if (![2, 6, 24].includes(numeric)) return;
+  connectivityWindowHours = numeric;
+  connectivityWindowButtons.forEach((button) => {
+    const buttonHours = Number(button?.dataset?.connectivityWindowHours);
+    const isActive = buttonHours === connectivityWindowHours;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function formatUtcLabel(timestamp) {
+  if (!timestamp) return "";
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString("es-ES", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    hour12: false,
+  });
+}
+
+function formatLabelInZone(timestamp, timeZone) {
+  if (!timestamp) return "";
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("es-ES", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  }).formatToParts(parsed);
+  const getPart = (type) => parts.find((item) => item.type === type)?.value || "";
+  const year = getPart("year");
+  const month = getPart("month");
+  const day = getPart("day");
+  const hour = getPart("hour");
+  const minute = getPart("minute");
+  return `${year}-${month}-${day} ${hour}:${minute}`;
+}
+
+function formatUtcAndCuba(timestamp) {
+  const utc = formatLabelInZone(timestamp, "UTC");
+  const cuba = formatLabelInZone(timestamp, "America/Havana");
+  if (!utc && !cuba) return "N/D";
+  if (!utc) return `${cuba} (Cuba)`;
+  if (!cuba) return `${utc} UTC`;
+  return `${utc} UTC (${cuba} Cuba)`;
+}
+
+function formatMetricValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/D";
+  if (Math.abs(numeric) >= 1000) {
+    return numeric.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+  }
+  if (Math.abs(numeric) >= 10) {
+    return numeric.toLocaleString("es-ES", { maximumFractionDigits: 2 });
+  }
+  return numeric.toLocaleString("es-ES", { maximumFractionDigits: 6 });
+}
+
+function formatPercentValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "N/D";
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${numeric.toFixed(1)}%`;
+}
+
+function buildSparklinePath(values, minValue, maxValue, width = 280, height = 56, pad = 4) {
+  if (!Array.isArray(values) || values.length < 2) return "";
+  const valid = values.filter((value) => Number.isFinite(Number(value))).map((value) => Number(value));
+  if (valid.length < 2) return "";
+
+  const min = Number.isFinite(minValue) ? Number(minValue) : Math.min(...valid);
+  const max = Number.isFinite(maxValue) ? Number(maxValue) : Math.max(...valid);
+  const span = Math.max(max - min, 1e-9);
+  const innerWidth = Math.max(width - pad * 2, 1);
+  const innerHeight = Math.max(height - pad * 2, 1);
+
+  let path = "";
+  values.forEach((value, idx) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    const x = pad + (values.length === 1 ? 0 : (idx / (values.length - 1)) * innerWidth);
+    const y = height - pad - ((numeric - min) / span) * innerHeight;
+    path += `${path ? " L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+  });
+  return path;
 }
 
 function getSelectedCategoryIds() {
@@ -565,6 +797,16 @@ function updateLegendCounts(posts) {
 
 window.handleNewReport = function (payload) {
   if (!payload || !map) return;
+  if (activeBaseMode === "connectivity") {
+    if (Array.isArray(allPosts) && payload.status === "approved") {
+      allPosts.unshift(payload);
+    }
+    updateLegendCounts(allPosts);
+    refreshRecent();
+    refreshAlerts();
+    return;
+  }
+
   const lat = Number(payload.latitude);
   const lng = Number(payload.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -607,7 +849,463 @@ window.handleNewReport = function (payload) {
   refreshAlerts();
 };
 
+function clearConnectivityLayer() {
+  if (connectivityGeoLayer && map) {
+    map.removeLayer(connectivityGeoLayer);
+  }
+  connectivityGeoLayer = null;
+}
+
+function normalizeProvinceName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function getConnectivitySeries(payload) {
+  if (payload?.http_requests_window) return payload.http_requests_window;
+  return payload?.http_requests_24h || {};
+}
+
+function getConnectivitySeriesForProvince(payload, provinceName) {
+  const byProvince = payload?.http_requests_window_by_province || {};
+  const selected = normalizeProvinceName(provinceName);
+  if (selected && byProvince && typeof byProvince === "object") {
+    const entries = Object.entries(byProvince);
+    for (let idx = 0; idx < entries.length; idx += 1) {
+      const [name, summary] = entries[idx];
+      if (normalizeProvinceName(name) === selected) return summary || {};
+    }
+  }
+  return getConnectivitySeries(payload);
+}
+
+function stopConnectivityPolling() {
+  if (!connectivityRefreshTimer) return;
+  clearInterval(connectivityRefreshTimer);
+  connectivityRefreshTimer = null;
+}
+
+function styleForConnectivityFeature(feature) {
+  const status = feature?.properties?.status || "unknown";
+  const color = CONNECTIVITY_STATUS_COLORS[status] || CONNECTIVITY_STATUS_COLORS.unknown;
+  const province = feature?.properties?.province || "";
+  const selected =
+    !!selectedConnectivityProvince &&
+    normalizeProvinceName(province) === normalizeProvinceName(selectedConnectivityProvince);
+  return {
+    color: selected ? "#f8fafc" : "#0f172a",
+    weight: selected ? 2.2 : 1.2,
+    opacity: 0.85,
+    fillColor: color,
+    fillOpacity: selected ? 0.7 : status === "unknown" ? 0.24 : 0.48,
+  };
+}
+
+function onConnectivityFeature(feature, layer) {
+  const province = feature?.properties?.province || "Provincia";
+  const status = feature?.properties?.status || "unknown";
+  const label = feature?.properties?.status_label || CONNECTIVITY_STATUS_LABELS[status] || "Sin datos";
+  const score = feature?.properties?.score;
+  const scoreLabel = Number.isFinite(Number(score)) ? `${Number(score).toFixed(1)}%` : "N/D";
+  layer.bindTooltip(`${province}: ${label} (${scoreLabel})`, {
+    sticky: true,
+    direction: "top",
+  });
+
+  layer.on("click", () => {
+    selectedConnectivityProvince = province;
+    selectedConnectivityProvinceState = {
+      province,
+      status: feature?.properties?.status || "unknown",
+      status_label: label,
+      score: Number.isFinite(Number(score)) ? Number(score) : null,
+    };
+    if (connectivityGeoLayer?.setStyle) {
+      connectivityGeoLayer.setStyle(styleForConnectivityFeature);
+    }
+    renderConnectivityProvincePanel(connectivityLastPayload);
+  });
+}
+
+function renderConnectivityData(payload) {
+  if (!map || !payload) return;
+
+  clearConnectivityLayer();
+
+  const geojson = payload.geojson || {};
+  const features = Array.isArray(geojson.features) ? geojson.features : [];
+  if (!features.length) return;
+
+  connectivityGeoLayer = L.geoJSON(geojson, {
+    style: styleForConnectivityFeature,
+    onEachFeature: onConnectivityFeature,
+  }).addTo(map);
+}
+
+async function fetchConnectivityData() {
+  const params = new URLSearchParams();
+  if ([2, 6, 24].includes(Number(connectivityWindowHours))) {
+    params.set("window_hours", String(connectivityWindowHours));
+  }
+  const url = params.toString() ? `/api/connectivity/latest?${params}` : "/api/connectivity/latest";
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("No se pudo cargar conectividad");
+  return await res.json();
+}
+
+function updateConnectivityUpdatedLabel(payload) {
+  if (!connectivityUpdatedLabel) return;
+  const snapshot = payload?.snapshot;
+  const windowInfo = payload?.window || {};
+  const windowHours = Number(windowInfo.hours);
+  const windowPrefix = [2, 6, 24].includes(windowHours)
+    ? `Ventana: ultimas ${windowHours}h`
+    : "";
+  if (!snapshot?.observed_at_utc) {
+    connectivityUpdatedLabel.textContent = windowPrefix
+      ? `${windowPrefix} | Sin datos recientes.`
+      : "Sin datos recientes.";
+    return;
+  }
+  const observed = formatUtcAndCuba(snapshot.observed_at_utc);
+  const staleText = payload?.stale ? " (dato no reciente)" : "";
+  let text = observed
+    ? `Ultima actualizacion (UTC): ${observed}${staleText}`
+    : `Ultima actualizacion (UTC): N/D${staleText}`;
+  if (windowPrefix) {
+    const score = Number(windowInfo.national_score);
+    const statusLabel = windowInfo.national_status_label || "Sin datos";
+    const scoreText = Number.isFinite(score) ? `${score.toFixed(1)}%` : "N/D";
+    text = `${windowPrefix} | Estado ventana: ${statusLabel} (${scoreText}) | ${text}`;
+  }
+  if (!payload?.has_geojson) {
+    text += " | GeoJSON provincial no configurado.";
+  }
+  connectivityUpdatedLabel.textContent = text;
+}
+
+function updateConnectivityTrafficPanel(payload) {
+  if (
+    !connectivityTrafficPanel ||
+    !connectivityTrafficValue ||
+    !connectivityTrafficDelta ||
+    !connectivityTrafficDrop ||
+    !connectivityTrafficNote
+  ) {
+    return;
+  }
+  const traffic = getConnectivitySeries(payload);
+  const available = !!traffic.available;
+  const seriesMain = Array.isArray(traffic.series_main) ? traffic.series_main : [];
+  const seriesPrev = Array.isArray(traffic.series_previous_aligned)
+    ? traffic.series_previous_aligned
+    : [];
+
+  if (!available || !seriesMain.length) {
+    connectivityTrafficValue.textContent = "N/D";
+    connectivityTrafficDelta.textContent = "Variacion vs control: N/D";
+    connectivityTrafficDrop.textContent = "Caida maxima: N/D";
+    connectivityTrafficNote.textContent = traffic.reason || "Sin serie disponible para la ventana activa.";
+    if (connectivitySparkMain) connectivitySparkMain.setAttribute("d", "");
+    if (connectivitySparkPrev) connectivitySparkPrev.setAttribute("d", "");
+    return;
+  }
+
+  const latestMain = Number(traffic.latest_main_value);
+  const latestPrev = Number(traffic.latest_previous_value);
+  const deltaPct = Number(traffic.delta_pct);
+  const maxDrop = Number(traffic.max_drop_from_peak_pct);
+  const hours = Number(traffic.window_hours || payload?.window?.hours);
+  const hoursLabel = [2, 6, 24].includes(hours) ? `${hours}h` : "ventana";
+
+  connectivityTrafficValue.textContent = `Ultimo valor: ${formatMetricValue(latestMain)}`;
+  connectivityTrafficDelta.textContent = `Variacion vs control: ${formatPercentValue(deltaPct)} (${formatMetricValue(
+    latestPrev
+  )})`;
+  connectivityTrafficDrop.textContent = `Caida maxima ${hoursLabel}: ${formatPercentValue(maxDrop)}`;
+
+  const latestTs = traffic.latest_timestamp_utc
+    ? formatUtcAndCuba(traffic.latest_timestamp_utc)
+    : "";
+  const pointCount = seriesMain.length;
+  connectivityTrafficNote.textContent = latestTs
+    ? `Puntos: ${pointCount} · Ultimo punto (UTC): ${latestTs}`
+    : `Puntos: ${pointCount}`;
+
+  const prevMap = new Map(
+    seriesPrev.map((item) => {
+      const value = Number(item?.value);
+      return [item?.timestamp_utc || "", Number.isFinite(value) ? value : NaN];
+    })
+  );
+  const mainValues = seriesMain.map((item) => Number(item?.value));
+  const prevValues = seriesMain.map((item) => {
+    const key = item?.timestamp_utc || "";
+    return prevMap.has(key) ? prevMap.get(key) : NaN;
+  });
+
+  const allValues = mainValues
+    .concat(prevValues)
+    .filter((value) => Number.isFinite(Number(value)))
+    .map((value) => Number(value));
+  const minValue = allValues.length ? Math.min(...allValues) : 0;
+  const maxValue = allValues.length ? Math.max(...allValues) : 1;
+
+  if (connectivitySparkMain) {
+    connectivitySparkMain.setAttribute(
+      "d",
+      buildSparklinePath(mainValues, minValue, maxValue)
+    );
+  }
+  if (connectivitySparkPrev) {
+    connectivitySparkPrev.setAttribute(
+      "d",
+      buildSparklinePath(prevValues, minValue, maxValue)
+    );
+  }
+}
+
+function computeNotableDrops(seriesMain, seriesPrev, topN = 8) {
+  const prevMap = new Map(
+    (seriesPrev || []).map((item) => {
+      const value = Number(item?.value);
+      return [item?.timestamp_utc || "", Number.isFinite(value) ? value : NaN];
+    })
+  );
+  const events = [];
+  for (let idx = 1; idx < (seriesMain || []).length; idx += 1) {
+    const current = seriesMain[idx] || {};
+    const previous = seriesMain[idx - 1] || {};
+    const currValue = Number(current.value);
+    const prevValue = Number(previous.value);
+    if (!Number.isFinite(currValue) || !Number.isFinite(prevValue) || currValue >= prevValue) continue;
+    const dropAbs = prevValue - currValue;
+    const dropPct = prevValue > 0 ? (dropAbs / prevValue) * 100 : null;
+    const controlValue = prevMap.get(current.timestamp_utc || "");
+    events.push({
+      timestamp_utc: current.timestamp_utc,
+      prev_value: prevValue,
+      curr_value: currValue,
+      drop_abs: dropAbs,
+      drop_pct: Number.isFinite(dropPct) ? dropPct : null,
+      control_value: Number.isFinite(controlValue) ? controlValue : null,
+    });
+  }
+  events.sort((a, b) => {
+    const aScore = Number.isFinite(a.drop_pct) ? a.drop_pct : a.drop_abs;
+    const bScore = Number.isFinite(b.drop_pct) ? b.drop_pct : b.drop_abs;
+    return bScore - aScore;
+  });
+  return events.slice(0, Math.max(1, topN));
+}
+
+function syncSelectedProvinceStateFromPayload(payload) {
+  if (!selectedConnectivityProvince || !payload) return;
+  const provinceList = Array.isArray(payload.provinces) ? payload.provinces : [];
+  const selectedKey = normalizeProvinceName(selectedConnectivityProvince);
+  const row = provinceList.find((item) => {
+    const rowName = item?.province || "";
+    return normalizeProvinceName(rowName) === selectedKey;
+  });
+  if (!row) return;
+  selectedConnectivityProvinceState = {
+    province: row.province,
+    status: row.status || "unknown",
+    status_label: row.status_label || CONNECTIVITY_STATUS_LABELS[row.status] || "Sin datos",
+    score: Number.isFinite(Number(row.score)) ? Number(row.score) : null,
+  };
+}
+
+function renderConnectivityProvincePanel(payload) {
+  if (
+    !connectivityProvincePanel ||
+    !connectivityProvinceTitle ||
+    !connectivityProvinceStatus ||
+    !connectivityProvinceRange ||
+    !connectivityProvinceChartMain ||
+    !connectivityProvinceChartPrev ||
+    !connectivityProvinceLog
+  ) {
+    return;
+  }
+
+  const hasSelection = !!selectedConnectivityProvince;
+  if (!hasSelection || !payload) {
+    connectivityProvinceTitle.textContent = "Selecciona una provincia";
+    connectivityProvinceStatus.textContent = "Haz clic en una provincia para ver detalle horario.";
+    connectivityProvinceRange.textContent = "";
+    connectivityProvinceChartMain.setAttribute("d", "");
+    connectivityProvinceChartPrev.setAttribute("d", "");
+    connectivityProvinceLog.innerHTML =
+      '<div class="connectivity-province-log-empty">Sin provincia seleccionada.</div>';
+    return;
+  }
+
+  const traffic = getConnectivitySeriesForProvince(payload, selectedConnectivityProvince);
+  const baseSeriesMain = Array.isArray(traffic.series_main) ? traffic.series_main : [];
+  const baseSeriesPrev = Array.isArray(traffic.series_previous_aligned)
+    ? traffic.series_previous_aligned
+    : [];
+  const provinceState = selectedConnectivityProvinceState || {};
+  const seriesMain = baseSeriesMain;
+  const seriesPrev = baseSeriesPrev;
+  const score = Number(provinceState.score);
+  const scoreText = Number.isFinite(score) ? `${score.toFixed(1)}%` : "N/D";
+  const statusLabel = provinceState.status_label || "Sin datos";
+  connectivityProvinceTitle.textContent = `Provincia: ${selectedConnectivityProvince}`;
+  connectivityProvinceStatus.textContent = `Estado: ${statusLabel} (${scoreText}) · Datos Radar por geoId provincial (estimados).`;
+
+  const windowInfo = payload?.window || {};
+  const rangeStart = windowInfo.start_utc ? formatUtcAndCuba(windowInfo.start_utc) : "N/D";
+  const rangeEnd = windowInfo.end_utc ? formatUtcAndCuba(windowInfo.end_utc) : "N/D";
+  const hours = Number(windowInfo.hours);
+  const hoursText = [2, 6, 24].includes(hours) ? `${hours}h` : "N/D";
+  connectivityProvinceRange.textContent = `Ventana ${hoursText}: ${rangeStart} -> ${rangeEnd}`;
+
+  if (!traffic.available || !seriesMain.length) {
+    connectivityProvinceChartMain.setAttribute("d", "");
+    connectivityProvinceChartPrev.setAttribute("d", "");
+    connectivityProvinceLog.innerHTML =
+      '<div class="connectivity-province-log-empty">Sin serie disponible para esta ventana.</div>';
+    return;
+  }
+
+  const prevMap = new Map(
+    seriesPrev.map((item) => {
+      const value = Number(item?.value);
+      return [item?.timestamp_utc || "", Number.isFinite(value) ? value : NaN];
+    })
+  );
+  const mainValues = seriesMain.map((item) => Number(item?.value));
+  const prevValues = seriesMain.map((item) => {
+    const key = item?.timestamp_utc || "";
+    return prevMap.has(key) ? prevMap.get(key) : NaN;
+  });
+  const allValues = mainValues
+    .concat(prevValues)
+    .filter((value) => Number.isFinite(Number(value)))
+    .map((value) => Number(value));
+  const minValue = allValues.length ? Math.min(...allValues) : 0;
+  const maxValue = allValues.length ? Math.max(...allValues) : 1;
+  connectivityProvinceChartMain.setAttribute(
+    "d",
+    buildSparklinePath(mainValues, minValue, maxValue, 280, 86)
+  );
+  connectivityProvinceChartPrev.setAttribute(
+    "d",
+    buildSparklinePath(prevValues, minValue, maxValue, 280, 86)
+  );
+
+  const drops = computeNotableDrops(seriesMain, seriesPrev, 10);
+  if (!drops.length) {
+    connectivityProvinceLog.innerHTML =
+      '<div class="connectivity-province-log-empty">No se detectaron caídas notorias por hora.</div>';
+    return;
+  }
+
+  connectivityProvinceLog.innerHTML = drops
+    .map((drop, idx) => {
+      const when = formatUtcAndCuba(drop.timestamp_utc);
+      const dropPct = Number.isFinite(drop.drop_pct) ? `-${drop.drop_pct.toFixed(1)}%` : "N/D";
+      const prevText = formatMetricValue(drop.prev_value);
+      const currText = formatMetricValue(drop.curr_value);
+      const controlText = Number.isFinite(drop.control_value)
+        ? formatMetricValue(drop.control_value)
+        : "N/D";
+      return `
+        <div class="connectivity-province-log-item">
+          <div><strong>#${idx + 1}</strong> Hora: ${escapeHtml(when)}</div>
+          <div>Caída: ${escapeHtml(dropPct)} (${escapeHtml(prevText)} -> ${escapeHtml(currText)})</div>
+          <div>Control en esa hora: ${escapeHtml(controlText)}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function refreshConnectivityLayer() {
+  if (activeBaseMode !== "connectivity") return;
+  try {
+    const payload = await fetchConnectivityData();
+    connectivityLastPayload = payload;
+    const snapshotId = payload?.snapshot?.id || null;
+    const renderKey = [
+      snapshotId,
+      payload?.window?.hours || "",
+      payload?.window?.snapshot_count || "",
+      payload?.window?.national_score ?? "",
+      payload?.window?.latest_observed_at_utc || "",
+      payload?.window?.max_drop_from_peak_pct ?? "",
+      payload?.has_geojson ? "1" : "0",
+    ].join("|");
+    if (renderKey !== connectivityLastRenderKey || !connectivityGeoLayer) {
+      renderConnectivityData(payload);
+      connectivityLastSnapshotId = snapshotId;
+      connectivityLastRenderKey = renderKey;
+    }
+    syncSelectedProvinceStateFromPayload(payload);
+    if (selectedConnectivityProvince && connectivityGeoLayer?.setStyle) {
+      connectivityGeoLayer.setStyle(styleForConnectivityFeature);
+    }
+    updateConnectivityUpdatedLabel(payload);
+    updateConnectivityTrafficPanel(payload);
+    renderConnectivityProvincePanel(payload);
+  } catch (err) {
+    if (connectivityUpdatedLabel) {
+      connectivityUpdatedLabel.textContent = "No fue posible actualizar conectividad.";
+    }
+    if (connectivityTrafficNote) {
+      connectivityTrafficNote.textContent = "No fue posible cargar la serie HTTP de la ventana.";
+    }
+    renderConnectivityProvincePanel(null);
+  }
+}
+
+function startConnectivityPolling() {
+  stopConnectivityPolling();
+  const intervalMs = Math.max(30, Number(connectivityRefreshSeconds) || 300) * 1000;
+  connectivityRefreshTimer = setInterval(() => {
+    refreshConnectivityLayer();
+  }, intervalMs);
+}
+
+async function enableConnectivityMode() {
+  activeBaseMode = "connectivity";
+  clearMarkers();
+  closeActivePopup();
+  setMapHintVisible(false);
+  setReportLegendVisible(false);
+  setConnectivityLegendVisible(true);
+  await refreshConnectivityLayer();
+  startConnectivityPolling();
+}
+
+function disableConnectivityMode() {
+  if (activeBaseMode !== "connectivity") return;
+  activeBaseMode = "map";
+  stopConnectivityPolling();
+  clearConnectivityLayer();
+  connectivityLastSnapshotId = null;
+  connectivityLastRenderKey = null;
+  connectivityLastPayload = null;
+  selectedConnectivityProvince = "";
+  selectedConnectivityProvinceState = null;
+  setConnectivityLegendVisible(false);
+  setReportLegendVisible(true);
+  setMapHintVisible(true);
+  renderConnectivityProvincePanel(null);
+}
+
 async function applyFilters() {
+  if (activeBaseMode === "connectivity") {
+    clearMarkers();
+    updateLegendCounts(allPosts);
+    return;
+  }
+
   const selected = getSelectedCategoryIds();
   const { province, municipality } = getSelectedLocationFilters();
   let filtered = selected.size ? allPosts.filter((post) => selected.has(post.category?.id)) : [];
@@ -992,6 +1690,45 @@ async function initMap() {
   }
 
   isAdmin = mapEl.dataset.isAdmin === "1";
+  connectivityRefreshSeconds = Number(mapEl.dataset.connectivityRefreshSeconds || 300);
+  const preferredProvider = (mapEl.dataset.mapProvider || MAP_PROVIDER_LEAFLET).toLowerCase();
+  mapHintElement = document.getElementById("mapHint");
+  reportLegendSection = document.getElementById("reportLegendSection");
+  connectivityLegendOverlay = document.getElementById("connectivityLegendOverlay");
+  connectivityUpdatedLabel = document.getElementById("connectivityUpdatedLabel");
+  connectivityTrafficPanel = document.getElementById("connectivityTrafficPanel");
+  connectivityTrafficValue = document.getElementById("connectivityTrafficValue");
+  connectivityTrafficDelta = document.getElementById("connectivityTrafficDelta");
+  connectivityTrafficDrop = document.getElementById("connectivityTrafficDrop");
+  connectivityTrafficNote = document.getElementById("connectivityTrafficNote");
+  connectivitySparkMain = document.getElementById("connectivitySparkMain");
+  connectivitySparkPrev = document.getElementById("connectivitySparkPrev");
+  connectivityProvincePanel = document.getElementById("connectivityProvincePanel");
+  connectivityProvinceTitle = document.getElementById("connectivityProvinceTitle");
+  connectivityProvinceStatus = document.getElementById("connectivityProvinceStatus");
+  connectivityProvinceRange = document.getElementById("connectivityProvinceRange");
+  connectivityProvinceChartMain = document.getElementById("connectivityProvinceChartMain");
+  connectivityProvinceChartPrev = document.getElementById("connectivityProvinceChartPrev");
+  connectivityProvinceLog = document.getElementById("connectivityProvinceLog");
+  connectivityWindowButtons = Array.from(
+    document.querySelectorAll("[data-connectivity-window-hours]")
+  );
+  setActiveConnectivityWindow(connectivityWindowHours);
+  renderConnectivityProvincePanel(null);
+
+  connectivityWindowButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const hours = Number(button.dataset.connectivityWindowHours);
+      if (![2, 6, 24].includes(hours)) return;
+      const changed = hours !== connectivityWindowHours;
+      setActiveConnectivityWindow(hours);
+      if (!changed) return;
+      connectivityLastRenderKey = null;
+      if (activeBaseMode === "connectivity") {
+        await refreshConnectivityLayer();
+      }
+    });
+  });
 
   map = L.map(mapEl, {
     zoomControl: true,
@@ -999,27 +1736,11 @@ async function initMap() {
     maxZoom: 19,
   });
   enableMiddleClickPan(map);
-
-  const streetsLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  });
-
-  const satelliteLayer = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution:
-        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-      maxZoom: 19,
-    }
-  );
-  const satelliteLabelsLayer = L.tileLayer(
-    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution: "Labels &copy; Esri",
-      maxZoom: 19,
-    }
-  );
+  const layerSet = buildMainBaseLayers(preferredProvider);
+  const streetsLayer = layerSet.streetsLayer;
+  const satelliteLayer = layerSet.satelliteLayer;
+  const satelliteLabelsLayer = layerSet.satelliteLabelsLayer;
+  const connectivityBaseLayer = layerSet.connectivityBaseLayer;
 
   streetsLayer.addTo(map);
   L.control
@@ -1027,18 +1748,37 @@ async function initMap() {
       {
         Mapa: streetsLayer,
         Satelite: satelliteLayer,
+        Conectividad: connectivityBaseLayer,
       },
       {},
       { collapsed: true }
     )
     .addTo(map);
+  setMapHintVisible(true);
+  setReportLegendVisible(true);
+  setConnectivityLegendVisible(false);
 
   map.on("baselayerchange", (event) => {
-    if (event.layer === satelliteLayer) {
+    if (event.layer === connectivityBaseLayer) {
+      if (satelliteLabelsLayer && map.hasLayer(satelliteLabelsLayer)) {
+        map.removeLayer(satelliteLabelsLayer);
+      }
+      enableConnectivityMode();
+      return;
+    }
+
+    if (activeBaseMode === "connectivity") {
+      disableConnectivityMode();
+    }
+
+    activeBaseMode = event.layer === satelliteLayer ? "satellite" : "map";
+    if (satelliteLabelsLayer && event.layer === satelliteLayer) {
       if (!map.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(map);
-    } else if (map.hasLayer(satelliteLabelsLayer)) {
+    } else if (satelliteLabelsLayer && map.hasLayer(satelliteLabelsLayer)) {
       map.removeLayer(satelliteLabelsLayer);
     }
+
+    applyFilters();
   });
 
   const isMobileViewport =
@@ -1103,6 +1843,11 @@ async function initMap() {
   }
 
   map.on("click", (event) => {
+    if (activeBaseMode === "connectivity") {
+      closeActivePopup();
+      return;
+    }
+
     closeActivePopup();
     const lat = event.latlng.lat.toFixed(6);
     const lng = event.latlng.lng.toFixed(6);

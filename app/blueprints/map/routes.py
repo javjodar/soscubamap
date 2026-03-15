@@ -54,6 +54,7 @@ from app.services.media_upload import (
 from app.services.push_notifications import push_enabled, send_alert_notification
 from app.services.recaptcha import recaptcha_enabled, verify_recaptcha
 from app.services.vote_identity import get_voter_hash
+from app.services.map_providers import get_map_provider_forms, get_map_provider_main
 
 from . import map_bp
 
@@ -64,6 +65,10 @@ URGENT_CATEGORY_SLUGS = {
     "movimiento-militar",
     "desconexion-internet",
 }
+
+
+def _google_maps_api_key():
+    return (current_app.config.get("GOOGLE_MAPS_API_KEY") or "").strip()
 
 
 def _get_chat_nick():
@@ -135,6 +140,7 @@ def _clean_captions(raw, count):
 def dashboard():
     categories = Category.query.order_by(Category.id.asc()).all()
     posts = Post.query.filter_by(status="approved").all()
+    map_provider_main = get_map_provider_main()
     return render_template(
         "map/dashboard.html",
         categories=categories,
@@ -146,6 +152,11 @@ def dashboard():
         irc_nick=_get_chat_nick(),
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
+        connectivity_refresh_seconds=current_app.config.get(
+            "CONNECTIVITY_FRONTEND_REFRESH_SECONDS", 300
+        ),
+        map_provider_main=map_provider_main,
+        google_maps_api_key=_google_maps_api_key(),
     )
 
 
@@ -500,6 +511,8 @@ def new_post():
                 provinces=list_provinces(),
                 municipalities_map=municipalities_map(),
                 recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+                map_provider_forms=get_map_provider_forms(),
+                google_maps_api_key=_google_maps_api_key(),
                 form_data=form_data,
                 errors=errors,
                 form_links=links,
@@ -637,6 +650,8 @@ def new_post():
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
         recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+        map_provider_forms=get_map_provider_forms(),
+        google_maps_api_key=_google_maps_api_key(),
         form_data=None,
         errors={},
         form_links=[],
@@ -886,6 +901,8 @@ def edit_report_public(post_id):
                 provinces=list_provinces(),
                 municipalities_map=municipalities_map(),
                 recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+                map_provider_forms=get_map_provider_forms(),
+                google_maps_api_key=_google_maps_api_key(),
             )
 
         try:
@@ -1028,6 +1045,8 @@ def edit_report_public(post_id):
         provinces=list_provinces(),
         municipalities_map=municipalities_map(),
         recaptcha_site_key=current_app.config.get("RECAPTCHA_V2_SITE_KEY"),
+        map_provider_forms=get_map_provider_forms(),
+        google_maps_api_key=_google_maps_api_key(),
         form_data=None,
         errors={},
         form_links=links,

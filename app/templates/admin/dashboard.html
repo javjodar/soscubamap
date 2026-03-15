@@ -24,6 +24,32 @@
   </div>
 
   <div class="admin-section">
+    <h2>Proveedor de mapas</h2>
+    <form method="post" action="{{ url_for('admin.update_map_providers') }}" class="form-grid">
+      <label>
+        Vista principal del mapa
+        <select name="map_provider_main" required>
+          <option value="{{ provider_leaflet }}" {% if map_provider_main == provider_leaflet %}selected{% endif %}>OSM + Leaflet</option>
+          <option value="{{ provider_google }}" {% if map_provider_main == provider_google %}selected{% endif %}>Google Maps</option>
+        </select>
+      </label>
+      <label>
+        Formulario de crear/editar reporte
+        <select name="map_provider_forms" required>
+          <option value="{{ provider_leaflet }}" {% if map_provider_forms == provider_leaflet %}selected{% endif %}>OSM + Leaflet</option>
+          <option value="{{ provider_google }}" {% if map_provider_forms == provider_google %}selected{% endif %}>Google Maps</option>
+        </select>
+      </label>
+      <button type="submit" class="btn-primary">Guardar proveedor</button>
+    </form>
+    {% if not google_maps_configured %}
+      <div class="muted" style="margin-top:8px;">
+        GOOGLE_MAPS_API_KEY no está configurada. Si seleccionas Google Maps, se usará Leaflet como fallback.
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
     <h2>Reportes</h2>
     <div class="admin-links">
       <a href="{{ url_for('admin.reports', status='approved') }}">Activos</a>
