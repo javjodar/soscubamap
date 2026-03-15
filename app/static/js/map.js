@@ -2,6 +2,15 @@ let map;
 let markers = [];
 let markerIndex = new Map();
 let shapeLayers = [];
+let connectivityGeoLayer;
+let connectivityRefreshTimer;
+let connectivityLastSnapshotId = null;
+let connectivityRefreshSeconds = 300;
+let activeBaseMode = "map";
+let mapHintElement;
+let reportLegendSection;
+let connectivityLegendOverlay;
+let connectivityUpdatedLabel;
 let activePopup;
 let recentTimer;
 let searchMarker;
@@ -21,6 +30,92 @@ const CUBA_BOUNDS = {
 const MOBILE_VIEWPORT_QUERY = "(max-width: 900px)";
 const HAVANA_CENTER = [23.1136, -82.3666];
 const MOBILE_HAVANA_ZOOM = 9;
+const MAP_PROVIDER_LEAFLET = "leaflet";
+const MAP_PROVIDER_GOOGLE = "google";
+const CONNECTIVITY_STATUS_COLORS = {
+  normal: "#2E7D32",
+  degraded: "#F9A825",
+  severe: "#EF6C00",
+  critical: "#C62828",
+  unknown: "#667085",
+};
+const CONNECTIVITY_STATUS_LABELS = {
+  normal: "Normal",
+  degraded: "Degradacion leve",
+  severe: "Problemas severos",
+  critical: "Apagon o conectividad critica",
+  unknown: "Sin datos",
+};
+
+function canUseGoogleMutant(provider) {
+  if (provider !== MAP_PROVIDER_GOOGLE) return false;
+  return (
+    typeof L !== "undefined" &&
+    L.gridLayer &&
+    typeof L.gridLayer.googleMutant === "function" &&
+    typeof window.google !== "undefined" &&
+    window.google &&
+    window.google.maps
+  );
+}
+
+function buildMainBaseLayers(provider) {
+  const useGoogle = canUseGoogleMutant(provider);
+
+  if (useGoogle) {
+    const mapLayer = L.gridLayer.googleMutant({
+      type: "roadmap",
+      maxZoom: 20,
+    });
+    const satelliteLayer = L.gridLayer.googleMutant({
+      type: "hybrid",
+      maxZoom: 20,
+    });
+    const connectivityLayer = L.gridLayer.googleMutant({
+      type: "roadmap",
+      maxZoom: 20,
+    });
+    return {
+      useGoogle,
+      streetsLayer: mapLayer,
+      satelliteLayer,
+      satelliteLabelsLayer: null,
+      connectivityBaseLayer: connectivityLayer,
+    };
+  }
+
+  const streetsLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  });
+
+  const satelliteLayer = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution:
+        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      maxZoom: 19,
+    }
+  );
+  const satelliteLabelsLayer = L.tileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    {
+      attribution: "Labels &copy; Esri",
+      maxZoom: 19,
+    }
+  );
+  const connectivityBaseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  });
+  return {
+    useGoogle,
+    streetsLayer,
+    satelliteLayer,
+    satelliteLabelsLayer,
+    connectivityBaseLayer,
+  };
+}
 
 function cubaLatLngBounds() {
   return L.latLngBounds(
@@ -222,6 +317,36 @@ function closeActivePopup() {
   if (!map || !activePopup) return;
   map.closePopup(activePopup);
   activePopup = null;
+}
+
+function setMapHintVisible(visible) {
+  if (!mapHintElement) return;
+  mapHintElement.hidden = !visible;
+}
+
+function setReportLegendVisible(visible) {
+  if (!reportLegendSection) return;
+  reportLegendSection.hidden = !visible;
+}
+
+function setConnectivityLegendVisible(visible) {
+  if (!connectivityLegendOverlay) return;
+  connectivityLegendOverlay.hidden = !visible;
+}
+
+function formatUtcLabel(timestamp) {
+  if (!timestamp) return "";
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString("es-ES", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+    hour12: false,
+  });
 }
 
 function getSelectedCategoryIds() {
@@ -568,6 +693,16 @@ function updateLegendCounts(posts) {
 
 window.handleNewReport = function (payload) {
   if (!payload || !map) return;
+  if (activeBaseMode === "connectivity") {
+    if (Array.isArray(allPosts) && payload.status === "approved") {
+      allPosts.unshift(payload);
+    }
+    updateLegendCounts(allPosts);
+    refreshRecent();
+    refreshAlerts();
+    return;
+  }
+
   const lat = Number(payload.latitude);
   const lng = Number(payload.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -610,7 +745,136 @@ window.handleNewReport = function (payload) {
   refreshAlerts();
 };
 
+function clearConnectivityLayer() {
+  if (connectivityGeoLayer && map) {
+    map.removeLayer(connectivityGeoLayer);
+  }
+  connectivityGeoLayer = null;
+}
+
+function stopConnectivityPolling() {
+  if (!connectivityRefreshTimer) return;
+  clearInterval(connectivityRefreshTimer);
+  connectivityRefreshTimer = null;
+}
+
+function styleForConnectivityFeature(feature) {
+  const status = feature?.properties?.status || "unknown";
+  const color = CONNECTIVITY_STATUS_COLORS[status] || CONNECTIVITY_STATUS_COLORS.unknown;
+  return {
+    color: "#0f172a",
+    weight: 1.2,
+    opacity: 0.85,
+    fillColor: color,
+    fillOpacity: status === "unknown" ? 0.24 : 0.48,
+  };
+}
+
+function onConnectivityFeature(feature, layer) {
+  const province = feature?.properties?.province || "Provincia";
+  const status = feature?.properties?.status || "unknown";
+  const label = feature?.properties?.status_label || CONNECTIVITY_STATUS_LABELS[status] || "Sin datos";
+  const score = feature?.properties?.score;
+  const scoreLabel = Number.isFinite(Number(score)) ? `${Number(score).toFixed(1)}%` : "N/D";
+  layer.bindTooltip(`${province}: ${label} (${scoreLabel})`, {
+    sticky: true,
+    direction: "top",
+  });
+}
+
+function renderConnectivityData(payload) {
+  if (!map || !payload) return;
+
+  clearConnectivityLayer();
+
+  const geojson = payload.geojson || {};
+  const features = Array.isArray(geojson.features) ? geojson.features : [];
+  if (!features.length) return;
+
+  connectivityGeoLayer = L.geoJSON(geojson, {
+    style: styleForConnectivityFeature,
+    onEachFeature: onConnectivityFeature,
+  }).addTo(map);
+}
+
+async function fetchConnectivityData() {
+  const res = await fetch("/api/connectivity/latest", { cache: "no-store" });
+  if (!res.ok) throw new Error("No se pudo cargar conectividad");
+  return await res.json();
+}
+
+function updateConnectivityUpdatedLabel(payload) {
+  if (!connectivityUpdatedLabel) return;
+  const snapshot = payload?.snapshot;
+  if (!snapshot?.observed_at_utc) {
+    connectivityUpdatedLabel.textContent = "Sin datos recientes.";
+    return;
+  }
+  const observed = formatUtcLabel(snapshot.observed_at_utc);
+  const staleText = payload?.stale ? " (dato no reciente)" : "";
+  let text = observed
+    ? `Ultima actualizacion (UTC): ${observed}${staleText}`
+    : `Ultima actualizacion (UTC): N/D${staleText}`;
+  if (!payload?.has_geojson) {
+    text += " | GeoJSON provincial no configurado.";
+  }
+  connectivityUpdatedLabel.textContent = text;
+}
+
+async function refreshConnectivityLayer() {
+  if (activeBaseMode !== "connectivity") return;
+  try {
+    const payload = await fetchConnectivityData();
+    const snapshotId = payload?.snapshot?.id || null;
+    if (snapshotId !== connectivityLastSnapshotId || !connectivityGeoLayer) {
+      renderConnectivityData(payload);
+      connectivityLastSnapshotId = snapshotId;
+    }
+    updateConnectivityUpdatedLabel(payload);
+  } catch (err) {
+    if (connectivityUpdatedLabel) {
+      connectivityUpdatedLabel.textContent = "No fue posible actualizar conectividad.";
+    }
+  }
+}
+
+function startConnectivityPolling() {
+  stopConnectivityPolling();
+  const intervalMs = Math.max(30, Number(connectivityRefreshSeconds) || 300) * 1000;
+  connectivityRefreshTimer = setInterval(() => {
+    refreshConnectivityLayer();
+  }, intervalMs);
+}
+
+async function enableConnectivityMode() {
+  activeBaseMode = "connectivity";
+  clearMarkers();
+  closeActivePopup();
+  setMapHintVisible(false);
+  setReportLegendVisible(false);
+  setConnectivityLegendVisible(true);
+  await refreshConnectivityLayer();
+  startConnectivityPolling();
+}
+
+function disableConnectivityMode() {
+  if (activeBaseMode !== "connectivity") return;
+  activeBaseMode = "map";
+  stopConnectivityPolling();
+  clearConnectivityLayer();
+  connectivityLastSnapshotId = null;
+  setConnectivityLegendVisible(false);
+  setReportLegendVisible(true);
+  setMapHintVisible(true);
+}
+
 async function applyFilters() {
+  if (activeBaseMode === "connectivity") {
+    clearMarkers();
+    updateLegendCounts(allPosts);
+    return;
+  }
+
   const selected = getSelectedCategoryIds();
   const { province, municipality } = getSelectedLocationFilters();
   let filtered = selected.size ? allPosts.filter((post) => selected.has(post.category?.id)) : [];
@@ -995,6 +1259,12 @@ async function initMap() {
   }
 
   isAdmin = mapEl.dataset.isAdmin === "1";
+  connectivityRefreshSeconds = Number(mapEl.dataset.connectivityRefreshSeconds || 300);
+  const preferredProvider = (mapEl.dataset.mapProvider || MAP_PROVIDER_LEAFLET).toLowerCase();
+  mapHintElement = document.getElementById("mapHint");
+  reportLegendSection = document.getElementById("reportLegendSection");
+  connectivityLegendOverlay = document.getElementById("connectivityLegendOverlay");
+  connectivityUpdatedLabel = document.getElementById("connectivityUpdatedLabel");
 
   map = L.map(mapEl, {
     zoomControl: true,
@@ -1002,27 +1272,11 @@ async function initMap() {
     maxZoom: 19,
   });
   enableMiddleClickPan(map);
-
-  const streetsLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  });
-
-  const satelliteLayer = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution:
-        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-      maxZoom: 19,
-    }
-  );
-  const satelliteLabelsLayer = L.tileLayer(
-    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution: "Labels &copy; Esri",
-      maxZoom: 19,
-    }
-  );
+  const layerSet = buildMainBaseLayers(preferredProvider);
+  const streetsLayer = layerSet.streetsLayer;
+  const satelliteLayer = layerSet.satelliteLayer;
+  const satelliteLabelsLayer = layerSet.satelliteLabelsLayer;
+  const connectivityBaseLayer = layerSet.connectivityBaseLayer;
 
   streetsLayer.addTo(map);
   L.control
@@ -1030,18 +1284,37 @@ async function initMap() {
       {
         Mapa: streetsLayer,
         Satelite: satelliteLayer,
+        Conectividad: connectivityBaseLayer,
       },
       {},
       { collapsed: true }
     )
     .addTo(map);
+  setMapHintVisible(true);
+  setReportLegendVisible(true);
+  setConnectivityLegendVisible(false);
 
   map.on("baselayerchange", (event) => {
-    if (event.layer === satelliteLayer) {
+    if (event.layer === connectivityBaseLayer) {
+      if (satelliteLabelsLayer && map.hasLayer(satelliteLabelsLayer)) {
+        map.removeLayer(satelliteLabelsLayer);
+      }
+      enableConnectivityMode();
+      return;
+    }
+
+    if (activeBaseMode === "connectivity") {
+      disableConnectivityMode();
+    }
+
+    activeBaseMode = event.layer === satelliteLayer ? "satellite" : "map";
+    if (satelliteLabelsLayer && event.layer === satelliteLayer) {
       if (!map.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(map);
-    } else if (map.hasLayer(satelliteLabelsLayer)) {
+    } else if (satelliteLabelsLayer && map.hasLayer(satelliteLabelsLayer)) {
       map.removeLayer(satelliteLabelsLayer);
     }
+
+    applyFilters();
   });
 
   const isMobileViewport =
@@ -1106,6 +1379,11 @@ async function initMap() {
   }
 
   map.on("click", (event) => {
+    if (activeBaseMode === "connectivity") {
+      closeActivePopup();
+      return;
+    }
+
     closeActivePopup();
     const lat = event.latlng.lat.toFixed(6);
     const lng = event.latlng.lng.toFixed(6);

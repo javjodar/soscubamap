@@ -402,6 +402,78 @@ h3 {
   color: var(--accent);
 }
 
+.connectivity-legend-overlay {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: min(320px, calc(100% - 32px));
+  background: rgba(10, 16, 21, 0.94);
+  border: 1px solid rgba(214, 251, 231, 0.24);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+  z-index: 950;
+  display: grid;
+  gap: 7px;
+}
+
+.connectivity-legend-overlay[hidden] {
+  display: none !important;
+}
+
+.connectivity-legend-title {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #d6fbe7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.connectivity-legend-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #e8fff3;
+}
+
+.connectivity-legend-item .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.connectivity-legend-item .dot-normal {
+  background: #2e7d32;
+}
+
+.connectivity-legend-item .dot-degraded {
+  background: #f9a825;
+}
+
+.connectivity-legend-item .dot-severe {
+  background: #ef6c00;
+}
+
+.connectivity-legend-item .dot-critical {
+  background: #c62828;
+}
+
+.connectivity-updated {
+  margin-top: 4px;
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 6px;
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-source-credit {
+  color: #9ec4b8;
+  font-size: 11px;
+}
+
 .pin-icon {
   width: 34px;
   height: 34px;

@@ -30,6 +30,21 @@ from app.models.discussion_comment import DiscussionComment
 from app.models.push_subscription import PushSubscription
 from app.models.vote_record import VoteRecord
 from app.services.vote_identity import get_voter_hash
+from app.models.connectivity_snapshot import ConnectivitySnapshot
+from app.services.connectivity import (
+    STATUS_COLORS,
+    STATUS_LABELS,
+    STATUS_UNKNOWN,
+    score_to_status,
+    serialize_snapshot_time,
+)
+from app.services.connectivity_geo import (
+    enrich_geojson_with_status,
+    load_province_geojson,
+    province_names_from_geojson,
+)
+from app.services.geo_lookup import list_provinces
+from app.services.cuba_locations import PROVINCES
 
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
@@ -100,6 +115,106 @@ def _get_verified_post_ids(post_ids):
 @api_bp.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@api_bp.route("/connectivity/latest")
+@limiter.limit("120/minute")
+def connectivity_latest():
+    now = datetime.utcnow()
+    stale_after_hours = int(current_app.config.get("CONNECTIVITY_STALE_AFTER_HOURS", 8))
+    stale_threshold = timedelta(hours=max(stale_after_hours, 1))
+
+    snapshot = (
+        ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
+        .order_by(ConnectivitySnapshot.observed_at_utc.desc(), ConnectivitySnapshot.id.desc())
+        .first()
+    )
+
+    geojson = load_province_geojson()
+    try:
+        province_names = set(list_provinces() or [])
+    except Exception:
+        province_names = set(PROVINCES)
+    if not province_names:
+        province_names = set(PROVINCES)
+    province_names.update(province_names_from_geojson(geojson))
+
+    national_score = None
+    national_status = STATUS_UNKNOWN
+    national_confidence = "unknown"
+    stale = True
+    partial = True
+    snapshot_payload = None
+    status_by_province = {}
+
+    if snapshot:
+        national_score = snapshot.score
+        national_status = score_to_status(snapshot.score)
+        national_confidence = snapshot.confidence or "country_level"
+        partial = bool(snapshot.is_partial)
+        stale = not snapshot.fetched_at_utc or (now - snapshot.fetched_at_utc) > stale_threshold
+        snapshot_payload = {
+            "id": snapshot.id,
+            "observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+            "fetched_at_utc": serialize_snapshot_time(snapshot.fetched_at_utc),
+            "traffic_value": snapshot.traffic_value,
+            "baseline_value": snapshot.baseline_value,
+            "score": snapshot.score,
+            "status": national_status,
+            "status_label": STATUS_LABELS.get(national_status, STATUS_LABELS[STATUS_UNKNOWN]),
+            "is_partial": partial,
+            "stale": stale,
+            "confidence": national_confidence,
+        }
+
+        for row in snapshot.provinces:
+            status_key = score_to_status(row.score)
+            status_by_province[row.province] = {
+                "province": row.province,
+                "score": row.score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": row.confidence or "estimated_country_level",
+                "is_estimated": True,
+            }
+            province_names.add(row.province)
+
+    province_items = []
+    for province in sorted(province_names):
+        state = status_by_province.get(province)
+        if not state:
+            status_key = national_status if national_score is not None else STATUS_UNKNOWN
+            state = {
+                "province": province,
+                "score": national_score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": national_confidence,
+                "is_estimated": True,
+            }
+            status_by_province[province] = state
+        province_items.append(state)
+
+    enriched_geojson = enrich_geojson_with_status(geojson, status_by_province)
+
+    return jsonify(
+        {
+            "snapshot": snapshot_payload,
+            "stale": stale,
+            "is_partial": partial,
+            "has_geojson": bool((enriched_geojson.get("features") or [])),
+            "provinces": province_items,
+            "geojson": enriched_geojson,
+            "source": {
+                "name": "Cloudflare Radar",
+                "url": "https://radar.cloudflare.com/",
+                "label": "Hecho con tecnologia de Cloudflare Radar",
+            },
+            "refresh_seconds": int(current_app.config.get("CONNECTIVITY_FRONTEND_REFRESH_SECONDS", 300)),
+        }
+    )
 
 
 @api_bp.route("/push/subscribe", methods=["POST"])

@@ -17,6 +17,9 @@ from .discussion_tag import DiscussionTag, discussion_post_tags
 from .push_subscription import PushSubscription
 from .vote_record import VoteRecord
 from .donation_log import DonationLog
+from .connectivity_ingestion_run import ConnectivityIngestionRun
+from .connectivity_snapshot import ConnectivitySnapshot
+from .connectivity_province_status import ConnectivityProvinceStatus
 
 __all__ = [
     "User",
@@ -39,4 +42,7 @@ __all__ = [
     "PushSubscription",
     "VoteRecord",
     "DonationLog",
+    "ConnectivityIngestionRun",
+    "ConnectivitySnapshot",
+    "ConnectivityProvinceStatus",
 ]

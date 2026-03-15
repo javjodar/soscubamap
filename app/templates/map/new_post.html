@@ -34,6 +34,7 @@
       data-lat="{{ preset_lat }}"
       data-lng="{{ preset_lng }}"
       data-zoom="{{ preset_zoom }}"
+      data-map-provider="{{ map_provider_forms }}"
       data-allow-zoom="1"
     ></div>
     <div class="draw-help">Usa el ícono de polígono para dibujar. Puedes borrar y volver a dibujar.</div>
@@ -235,6 +236,12 @@
 />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
+{% if map_provider_forms == 'google' and google_maps_api_key %}
+<script
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&v=weekly"
+></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.15.0/Leaflet.GoogleMutant.js" crossorigin=""></script>
+{% endif %}
 <script>
   window.CUBA_MUNICIPALITIES = {{ municipalities_map|tojson }};
 </script>

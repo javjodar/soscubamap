@@ -98,17 +98,42 @@
     class="map-canvas"
     data-new-url="{{ url_for('map.new_post') }}"
     data-is-admin="{{ 1 if current_user.is_authenticated and current_user.has_role('administrador') else 0 }}"
+    data-connectivity-refresh-seconds="{{ connectivity_refresh_seconds }}"
+    data-map-provider="{{ map_provider_main }}"
     data-allow-zoom="1"
   >
     <div class="map-placeholder">
       <div class="map-title">OpenStreetMap</div>
       <div class="map-subtitle">Cargando mapa base.</div>
     </div>
-    <div class="map-hint">Haz click en el mapa para crear un reporte</div>
+    <div class="map-hint" id="mapHint">Haz click en el mapa para crear un reporte</div>
+    <div id="connectivityLegendOverlay" class="connectivity-legend-overlay" hidden>
+      <div class="connectivity-legend-title">Conectividad</div>
+      <div class="connectivity-legend-item">
+        <span class="dot dot-normal"></span>
+        <span>Normal</span>
+      </div>
+      <div class="connectivity-legend-item">
+        <span class="dot dot-degraded"></span>
+        <span>Degradación leve</span>
+      </div>
+      <div class="connectivity-legend-item">
+        <span class="dot dot-severe"></span>
+        <span>Problemas severos</span>
+      </div>
+      <div class="connectivity-legend-item">
+        <span class="dot dot-critical"></span>
+        <span>Apagón o conectividad crítica</span>
+      </div>
+      <div class="connectivity-updated" id="connectivityUpdatedLabel"></div>
+      {% if current_user.is_authenticated and current_user.has_role('administrador') %}
+        <div class="connectivity-source-credit">Hecho con tecnología de Cloudflare Radar</div>
+      {% endif %}
+    </div>
   </div>
 </section>
 
-<section class="legend">
+<section class="legend" id="reportLegendSection">
   {% set alert_slugs = ["accion-represiva", "movimiento-tropas", "desconexion-internet"] %}
   <div class="legend-header">
     <div class="legend-title">Leyenda de íconos</div>
@@ -165,6 +190,12 @@
   crossorigin=""
 />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+{% if map_provider_main == 'google' and google_maps_api_key %}
+<script
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&v=weekly"
+></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.15.0/Leaflet.GoogleMutant.js" crossorigin=""></script>
+{% endif %}
 <script>
   window.CUBA_MUNICIPALITIES = {{ municipalities_map|tojson }};
 </script>

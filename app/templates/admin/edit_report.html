@@ -36,6 +36,7 @@
       data-lat="{{ fd.latitude if use_form else post.latitude }}"
       data-lng="{{ fd.longitude if use_form else post.longitude }}"
       data-geojson="{{ (fd.polygon_geojson if use_form else post.polygon_geojson)|default('')|e }}"
+      data-map-provider="{{ map_provider_forms }}"
       data-allow-zoom="1"
     ></div>
     <div class="draw-help">Usa polígono, rectángulo o círculo. Puedes editar el área antes de guardar.</div>
@@ -233,6 +234,12 @@
 />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
+{% if map_provider_forms == 'google' and google_maps_api_key %}
+<script
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&v=weekly"
+></script>
+<script src="https://unpkg.com/leaflet.gridlayer.googlemutant@0.15.0/Leaflet.GoogleMutant.js" crossorigin=""></script>
+{% endif %}
 <script>
   window.CUBA_MUNICIPALITIES = {{ municipalities_map|tojson }};
 </script>

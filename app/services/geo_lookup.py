@@ -10,6 +10,8 @@ DEFAULT_PROVINCE_KEYS = [
     "provincia",
     "nombre_prov",
     "name",
+    "shapeName",
+    "shape_name",
     "NAME_1",
     "name_1",
     "ADM1_ES",
@@ -77,6 +79,32 @@ def _get_env_or_config(key, default=None):
         return current_app.config.get(key, os.getenv(key, default))
     except Exception:
         return os.getenv(key, default)
+
+
+def _resolve_path(path):
+    raw = (path or "").strip()
+    if not raw:
+        return ""
+
+    expanded = os.path.expanduser(os.path.expandvars(raw))
+    if os.path.isabs(expanded):
+        return expanded
+
+    candidates = []
+    try:
+        from flask import current_app
+
+        project_root = os.path.abspath(os.path.join(current_app.root_path, os.pardir))
+        candidates.append(os.path.abspath(os.path.join(project_root, expanded)))
+    except Exception:
+        pass
+
+    candidates.append(os.path.abspath(expanded))
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    return candidates[0]
 
 
 def _pick_name(props, keys):
@@ -168,8 +196,8 @@ def _contains(point, polygons):
 
 
 def _load_layers():
-    prov_path = _get_env_or_config("GEOJSON_PROVINCES_PATH")
-    mun_path = _get_env_or_config("GEOJSON_MUNICIPALITIES_PATH")
+    prov_path = _resolve_path(_get_env_or_config("GEOJSON_PROVINCES_PATH"))
+    mun_path = _resolve_path(_get_env_or_config("GEOJSON_MUNICIPALITIES_PATH"))
 
     prov_keys = _get_env_or_config("GEOJSON_PROVINCE_KEYS")
     mun_keys = _get_env_or_config("GEOJSON_MUNICIPALITY_KEYS")

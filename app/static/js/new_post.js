@@ -9,6 +9,8 @@ const CUBA_BOUNDS = {
   west: -86.2,
   east: -73.0,
 };
+const MAP_PROVIDER_LEAFLET = "leaflet";
+const MAP_PROVIDER_GOOGLE = "google";
 
 const PLACEHOLDER_BY_SLUG = {
   "accion-represiva": {
@@ -116,6 +118,59 @@ const isUrgentCategory = (key) => {
 
 const isResidenciaCategory = (key) => key.includes("residencia") && key.includes("represor");
 const isOtrosCategory = (key) => key === "otros" || key.includes("otros");
+
+function canUseGoogleMutant(provider) {
+  if (provider !== MAP_PROVIDER_GOOGLE) return false;
+  return (
+    typeof L !== "undefined" &&
+    L.gridLayer &&
+    typeof L.gridLayer.googleMutant === "function" &&
+    typeof window.google !== "undefined" &&
+    window.google &&
+    window.google.maps
+  );
+}
+
+function buildDrawBaseLayers(provider) {
+  const useGoogle = canUseGoogleMutant(provider);
+  if (useGoogle) {
+    return {
+      useGoogle,
+      streetsLayer: L.gridLayer.googleMutant({
+        type: "roadmap",
+        maxZoom: 20,
+      }),
+      satelliteLayer: L.gridLayer.googleMutant({
+        type: "hybrid",
+        maxZoom: 20,
+      }),
+      satelliteLabelsLayer: null,
+    };
+  }
+
+  return {
+    useGoogle,
+    streetsLayer: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }),
+    satelliteLayer: L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution:
+          'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+        maxZoom: 19,
+      }
+    ),
+    satelliteLabelsLayer: L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Labels &copy; Esri",
+        maxZoom: 19,
+      }
+    ),
+  };
+}
 
 const getPlaceholderSample = (key) => {
   if (!key) return null;
@@ -399,6 +454,7 @@ function loadInitialGeometry(mapEl) {
 function setupDrawMap() {
   const mapEl = document.getElementById("drawMap");
   if (!mapEl || typeof L === "undefined") return;
+  const preferredProvider = (mapEl.dataset.mapProvider || MAP_PROVIDER_LEAFLET).toLowerCase();
 
   const lat = parseFloat(mapEl.dataset.lat);
   const lng = parseFloat(mapEl.dataset.lng);
@@ -413,30 +469,15 @@ function setupDrawMap() {
     zoomControl: true,
   }).setView(center, baseZoom);
   enableMiddleClickPan(drawMap);
-
-  const streetsLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19,
-  });
-
-  const satelliteLayer = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution:
-        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-      maxZoom: 19,
-    }
-  );
-  const satelliteLabelsLayer = L.tileLayer(
-    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-    {
-      attribution: "Labels &copy; Esri",
-      maxZoom: 19,
-    }
-  );
+  const layerSet = buildDrawBaseLayers(preferredProvider);
+  const streetsLayer = layerSet.streetsLayer;
+  const satelliteLayer = layerSet.satelliteLayer;
+  const satelliteLabelsLayer = layerSet.satelliteLabelsLayer;
 
   satelliteLayer.addTo(drawMap);
-  satelliteLabelsLayer.addTo(drawMap);
+  if (satelliteLabelsLayer) {
+    satelliteLabelsLayer.addTo(drawMap);
+  }
   L.control
     .layers(
       {
@@ -449,9 +490,9 @@ function setupDrawMap() {
     .addTo(drawMap);
 
   drawMap.on("baselayerchange", (event) => {
-    if (event.layer === satelliteLayer) {
+    if (satelliteLabelsLayer && event.layer === satelliteLayer) {
       if (!drawMap.hasLayer(satelliteLabelsLayer)) satelliteLabelsLayer.addTo(drawMap);
-    } else if (drawMap.hasLayer(satelliteLabelsLayer)) {
+    } else if (satelliteLabelsLayer && drawMap.hasLayer(satelliteLabelsLayer)) {
       drawMap.removeLayer(satelliteLabelsLayer);
     }
   });
