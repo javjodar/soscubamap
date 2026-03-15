@@ -169,12 +169,19 @@ def _latest_successful_connectivity_run():
     )
 
 
-def _build_http_requests_24h_summary():
+def _build_http_requests_window_summary(window_hours=24):
+    try:
+        hours = int(window_hours)
+    except Exception:
+        hours = 24
+    hours = max(1, min(hours, 48))
+
     run = _latest_successful_connectivity_run()
     if not run or not run.payload_json:
         return {
             "available": False,
             "reason": "No hay ingestas exitosas con payload.",
+            "window_hours": hours,
             "series_main": [],
             "series_previous_aligned": [],
         }
@@ -185,6 +192,7 @@ def _build_http_requests_24h_summary():
         return {
             "available": False,
             "reason": f"Payload de ingesta invalido: {exc}",
+            "window_hours": hours,
             "source_run_id": run.id,
             "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
             "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
@@ -198,6 +206,7 @@ def _build_http_requests_24h_summary():
         return {
             "available": False,
             "reason": "La serie main no contiene puntos.",
+            "window_hours": hours,
             "source_run_id": run.id,
             "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
             "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
@@ -206,14 +215,14 @@ def _build_http_requests_24h_summary():
         }
 
     latest_ts = main_points_all[-1].get("timestamp")
-    window_start = latest_ts - timedelta(hours=24) if latest_ts else None
+    window_start = latest_ts - timedelta(hours=hours) if latest_ts else None
     main_points = [
         item
         for item in main_points_all
         if item.get("timestamp") is not None and (window_start is None or item.get("timestamp") >= window_start)
     ]
     if not main_points:
-        main_points = main_points_all[-24:]
+        main_points = main_points_all[-hours:]
 
     previous_aligned = []
     if previous_points_all and main_points:
@@ -248,6 +257,7 @@ def _build_http_requests_24h_summary():
     min_main_value = min(main_values) if main_values else None
     avg_main_value = (sum(main_values) / len(main_values)) if main_values else None
 
+    score_method = "worst_from_main_peak_ratio_pct"
     max_drop_from_peak_pct = None
     if (
         peak_main_value is not None
@@ -256,8 +266,18 @@ def _build_http_requests_24h_summary():
     ):
         max_drop_from_peak_pct = ((peak_main_value - min_main_value) / peak_main_value) * 100.0
 
+    score_worst_pct = None
+    if min_main_value is not None and peak_main_value is not None:
+        if peak_main_value > 0:
+            score_worst_pct = (min_main_value / peak_main_value) * 100.0
+            score_worst_pct = max(0.0, min(score_worst_pct, 100.0))
+        elif peak_main_value == 0 and min_main_value == 0:
+            score_worst_pct = 0.0
+
     return {
         "available": bool(main_points),
+        "window_hours": hours,
+        "score_method": score_method,
         "source_run_id": run.id,
         "source_started_at_utc": serialize_snapshot_time(run.started_at_utc),
         "source_finished_at_utc": serialize_snapshot_time(run.finished_at_utc),
@@ -269,6 +289,7 @@ def _build_http_requests_24h_summary():
         "min_main_value": min_main_value,
         "avg_main_value": avg_main_value,
         "max_drop_from_peak_pct": max_drop_from_peak_pct,
+        "score_worst_pct": score_worst_pct,
         "series_main": [
             point for point in (_serialize_timeseries_point(item) for item in main_points) if point
         ],
@@ -278,6 +299,10 @@ def _build_http_requests_24h_summary():
             if point
         ],
     }
+
+
+def _build_http_requests_24h_summary():
+    return _build_http_requests_window_summary(24)
 
 
 def _cloudflare_probe():
@@ -406,6 +431,7 @@ def connectivity_latest():
     window_hours = _parse_connectivity_window_hours()
     window_start = now - timedelta(hours=window_hours)
     window_aggregation = "worst"
+    http_requests_window = _build_http_requests_window_summary(window_hours)
 
     snapshot = (
         ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
@@ -467,7 +493,57 @@ def connectivity_latest():
             "confidence": snapshot.confidence or "country_level",
         }
 
-    if window_snapshots:
+    window_score = (
+        to_float(http_requests_window.get("score_worst_pct"))
+        if isinstance(http_requests_window, dict) and http_requests_window.get("available")
+        else None
+    )
+    window_series_main = (
+        (http_requests_window.get("series_main") or [])
+        if isinstance(http_requests_window, dict)
+        else []
+    )
+    window_latest_utc = (
+        (window_series_main[-1].get("timestamp_utc") if window_series_main else None)
+        or (
+            http_requests_window.get("latest_timestamp_utc")
+            if isinstance(http_requests_window, dict)
+            else None
+        )
+    )
+    window_start_utc = (
+        window_series_main[0].get("timestamp_utc")
+        if window_series_main
+        else serialize_snapshot_time(window_start)
+    )
+    window_end_utc = window_latest_utc or serialize_snapshot_time(now)
+
+    if window_score is not None:
+        national_score = window_score
+        national_status = score_to_status(window_score)
+        national_confidence = "window_worst_http_series_country_level"
+        partial = bool(snapshot.is_partial) if snapshot else False
+        window_payload.update(
+            {
+                "aggregation": "worst_http_series",
+                "score_method": http_requests_window.get("score_method")
+                or "worst_from_main_peak_ratio_pct",
+                "snapshot_count": len(window_snapshots),
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "start_utc": window_start_utc,
+                "end_utc": window_end_utc,
+                "latest_observed_at_utc": window_latest_utc,
+                "http_series_points": len(window_series_main),
+                "max_drop_from_peak_pct": http_requests_window.get(
+                    "max_drop_from_peak_pct"
+                ),
+            }
+        )
+    elif window_snapshots:
         national_window_scores = [item.score for item in window_snapshots]
         if window_aggregation == "worst":
             national_score = _minimum_numeric(national_window_scores)
@@ -511,6 +587,8 @@ def connectivity_latest():
                 "latest_observed_at_utc": serialize_snapshot_time(
                     window_snapshots[-1].observed_at_utc
                 ),
+                "start_utc": serialize_snapshot_time(window_start),
+                "end_utc": serialize_snapshot_time(now),
             }
         )
     elif snapshot:
@@ -541,6 +619,8 @@ def connectivity_latest():
                     national_status, STATUS_LABELS[STATUS_UNKNOWN]
                 ),
                 "latest_observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+                "start_utc": serialize_snapshot_time(window_start),
+                "end_utc": serialize_snapshot_time(now),
             }
         )
 
@@ -562,7 +642,11 @@ def connectivity_latest():
         province_items.append(state)
 
     enriched_geojson = enrich_geojson_with_status(geojson, status_by_province)
-    http_requests_24h = _build_http_requests_24h_summary()
+    http_requests_24h = (
+        http_requests_window
+        if window_hours == 24
+        else _build_http_requests_24h_summary()
+    )
 
     return jsonify(
         {
@@ -573,6 +657,7 @@ def connectivity_latest():
             "provinces": province_items,
             "geojson": enriched_geojson,
             "window": window_payload,
+            "http_requests_window": http_requests_window,
             "http_requests_24h": http_requests_24h,
             "source": {
                 "name": "Cloudflare Radar",
@@ -591,6 +676,7 @@ def connectivity_debug():
         return jsonify({"error": "Acceso denegado"}), 403
 
     now = datetime.utcnow()
+    debug_window_hours = _parse_connectivity_window_hours()
     stale_after_hours = int(current_app.config.get("CONNECTIVITY_STALE_AFTER_HOURS", 8))
     stale_threshold = timedelta(hours=max(stale_after_hours, 1))
 
@@ -680,6 +766,10 @@ def connectivity_debug():
             "geojson_feature_count": len(geojson.get("features") or []),
             "geojson_province_name_count": len(geojson_names),
             "diagnostic": geo_diagnostic,
+        },
+        "window_probe": {
+            "hours": debug_window_hours,
+            "http_requests_window": _build_http_requests_window_summary(debug_window_hours),
         },
         "snapshot": snapshot_payload,
         "ingestion_runs": runs_payload,

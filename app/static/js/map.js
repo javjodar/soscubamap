@@ -857,6 +857,19 @@ function clearConnectivityLayer() {
   connectivityGeoLayer = null;
 }
 
+function normalizeProvinceName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function getConnectivitySeries(payload) {
+  if (payload?.http_requests_window) return payload.http_requests_window;
+  return payload?.http_requests_24h || {};
+}
+
 function stopConnectivityPolling() {
   if (!connectivityRefreshTimer) return;
   clearInterval(connectivityRefreshTimer);
@@ -867,7 +880,9 @@ function styleForConnectivityFeature(feature) {
   const status = feature?.properties?.status || "unknown";
   const color = CONNECTIVITY_STATUS_COLORS[status] || CONNECTIVITY_STATUS_COLORS.unknown;
   const province = feature?.properties?.province || "";
-  const selected = !!selectedConnectivityProvince && province === selectedConnectivityProvince;
+  const selected =
+    !!selectedConnectivityProvince &&
+    normalizeProvinceName(province) === normalizeProvinceName(selectedConnectivityProvince);
   return {
     color: selected ? "#f8fafc" : "#0f172a",
     weight: selected ? 2.2 : 1.2,
@@ -970,7 +985,7 @@ function updateConnectivityTrafficPanel(payload) {
   ) {
     return;
   }
-  const traffic = payload?.http_requests_24h || {};
+  const traffic = getConnectivitySeries(payload);
   const available = !!traffic.available;
   const seriesMain = Array.isArray(traffic.series_main) ? traffic.series_main : [];
   const seriesPrev = Array.isArray(traffic.series_previous_aligned)
@@ -991,12 +1006,14 @@ function updateConnectivityTrafficPanel(payload) {
   const latestPrev = Number(traffic.latest_previous_value);
   const deltaPct = Number(traffic.delta_pct);
   const maxDrop = Number(traffic.max_drop_from_peak_pct);
+  const hours = Number(traffic.window_hours || payload?.window?.hours);
+  const hoursLabel = [2, 6, 24].includes(hours) ? `${hours}h` : "ventana";
 
   connectivityTrafficValue.textContent = `Ultimo valor: ${formatMetricValue(latestMain)}`;
   connectivityTrafficDelta.textContent = `Variacion vs control: ${formatPercentValue(deltaPct)} (${formatMetricValue(
     latestPrev
   )})`;
-  connectivityTrafficDrop.textContent = `Caida maxima 24h: ${formatPercentValue(maxDrop)}`;
+  connectivityTrafficDrop.textContent = `Caida maxima ${hoursLabel}: ${formatPercentValue(maxDrop)}`;
 
   const latestTs = traffic.latest_timestamp_utc
     ? formatUtcAndCuba(traffic.latest_timestamp_utc)
@@ -1070,7 +1087,11 @@ function computeNotableDrops(seriesMain, seriesPrev, topN = 8) {
 function syncSelectedProvinceStateFromPayload(payload) {
   if (!selectedConnectivityProvince || !payload) return;
   const provinceList = Array.isArray(payload.provinces) ? payload.provinces : [];
-  const row = provinceList.find((item) => item?.province === selectedConnectivityProvince);
+  const selectedKey = normalizeProvinceName(selectedConnectivityProvince);
+  const row = provinceList.find((item) => {
+    const rowName = item?.province || "";
+    return normalizeProvinceName(rowName) === selectedKey;
+  });
   if (!row) return;
   selectedConnectivityProvinceState = {
     province: row.province,
@@ -1105,7 +1126,7 @@ function renderConnectivityProvincePanel(payload) {
     return;
   }
 
-  const traffic = payload?.http_requests_24h || {};
+  const traffic = getConnectivitySeries(payload);
   const seriesMain = Array.isArray(traffic.series_main) ? traffic.series_main : [];
   const seriesPrev = Array.isArray(traffic.series_previous_aligned) ? traffic.series_previous_aligned : [];
   const provinceState = selectedConnectivityProvinceState || {};
@@ -1113,7 +1134,7 @@ function renderConnectivityProvincePanel(payload) {
   const scoreText = Number.isFinite(score) ? `${score.toFixed(1)}%` : "N/D";
   const statusLabel = provinceState.status_label || "Sin datos";
   connectivityProvinceTitle.textContent = `Provincia: ${selectedConnectivityProvince}`;
-  connectivityProvinceStatus.textContent = `Estado: ${statusLabel} (${scoreText}) · Datos estimados a nivel nacional.`;
+  connectivityProvinceStatus.textContent = `Estado: ${statusLabel} (${scoreText}) · Serie Radar nacional compartida por falta de granularidad provincial.`;
 
   const windowInfo = payload?.window || {};
   const rangeStart = windowInfo.start_utc ? formatUtcAndCuba(windowInfo.start_utc) : "N/D";
@@ -1208,7 +1229,7 @@ async function refreshConnectivityLayer() {
       connectivityUpdatedLabel.textContent = "No fue posible actualizar conectividad.";
     }
     if (connectivityTrafficNote) {
-      connectivityTrafficNote.textContent = "No fue posible cargar la serie HTTP 24h.";
+      connectivityTrafficNote.textContent = "No fue posible cargar la serie HTTP de la ventana.";
     }
     renderConnectivityProvincePanel(null);
   }
