@@ -58,6 +58,7 @@ from app.services.connectivity_geo import (
 from app.services.geo_lookup import list_provinces
 from app.services.cuba_locations import PROVINCES
 from app.services.protests import (
+    display_source_name as protest_display_source_name,
     get_frontend_refresh_seconds as protest_frontend_refresh_seconds,
     get_min_confidence_to_show as protest_min_confidence_to_show,
 )
@@ -731,6 +732,11 @@ def _build_protest_feature(row):
         return None
     published_at_utc = row.source_published_at_utc.isoformat() + "Z" if row.source_published_at_utc else None
     confidence = to_float(row.confidence_score)
+    source_name = protest_display_source_name(
+        source_feed=row.source_feed or "",
+        source_url=row.source_url or "",
+        fallback_name=row.source_name or "",
+    )
     return {
         "type": "Feature",
         "geometry": {
@@ -744,7 +750,8 @@ def _build_protest_feature(row):
             "confidence_score": confidence,
             "color": _protest_event_color(row.event_type, confidence),
             "source_feed": row.source_feed,
-            "source_name": row.source_name,
+            "source_name": source_name,
+            "source_name_raw": row.source_name,
             "source_platform": row.source_platform,
             "source_url": row.source_url,
             "source_published_at_utc": published_at_utc,

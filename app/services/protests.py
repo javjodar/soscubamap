@@ -327,6 +327,82 @@ def extract_source_name(feed_url):
     return host or "rss"
 
 
+def _source_name_overrides():
+    raw = str(_get_env_or_config("PROTEST_SOURCE_NAME_OVERRIDES_JSON", "") or "").strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    overrides = {}
+    for raw_key, raw_name in payload.items():
+        name = str(raw_name or "").strip()
+        key = str(raw_key or "").strip()
+        if not name or not key:
+            continue
+        canonical_key = canonicalize_source_url(key) or key
+        overrides[canonical_key] = name
+    return overrides
+
+
+def _extract_handle_from_source_url(source_url):
+    parsed = urlparse(str(source_url or "").strip())
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host not in {"x.com", "twitter.com"}:
+        return ""
+
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if not segments:
+        return ""
+    first = segments[0].strip()
+    if first.startswith("@"):
+        first = first[1:]
+    if first.lower() in {
+        "i",
+        "intent",
+        "search",
+        "hashtag",
+        "home",
+        "explore",
+        "messages",
+        "notifications",
+        "compose",
+        "settings",
+    }:
+        return ""
+    if not re.match(r"^[A-Za-z0-9_]{1,30}$", first):
+        return ""
+    return f"@{first}"
+
+
+def display_source_name(source_feed="", source_url="", fallback_name=""):
+    overrides = _source_name_overrides()
+    feed_key = canonicalize_source_url(source_feed) or str(source_feed or "").strip()
+    source_key = canonicalize_source_url(source_url) or str(source_url or "").strip()
+
+    if feed_key and feed_key in overrides:
+        return overrides[feed_key]
+    if source_key and source_key in overrides:
+        return overrides[source_key]
+
+    handle = _extract_handle_from_source_url(source_url)
+    if handle:
+        return handle
+
+    fallback = str(fallback_name or "").strip()
+    if fallback:
+        return fallback
+    if source_url:
+        return extract_source_name(source_url)
+    return extract_source_name(source_feed)
+
+
 def extract_source_platform(source_url):
     host = extract_source_name(source_url)
     if host.endswith("x.com") or host.endswith("twitter.com"):
@@ -882,7 +958,11 @@ def build_event_payload(item):
     published_day = published_at.date()
 
     source_feed = item.get("source_feed") or ""
-    source_name = extract_source_name(source_feed)
+    source_name = display_source_name(
+        source_feed=source_feed,
+        source_url=source_url,
+        fallback_name=extract_source_name(source_feed),
+    )
     source_platform = extract_source_platform(source_url)
     dedupe_hash = build_dedupe_hash(clean_text, source_url, published_at, place_result)
 

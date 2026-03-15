@@ -1483,14 +1483,14 @@ function getProtestColor(feature) {
   );
 }
 
-function createProtestFireIcon(feature) {
+function createProtestCircleIcon(feature) {
   const color = getProtestColor(feature);
   return L.divIcon({
-    className: "protest-fire-icon-wrap",
-    html: `<div class="protest-fire-icon" style="--protest-fire-color:${color}">🔥</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 26],
-    popupAnchor: [0, -24],
+    className: "protest-marker-icon-wrap",
+    html: `<span class="protest-marker-icon" style="--protest-marker-color:${color}"></span>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -10],
   });
 }
 
@@ -1662,7 +1662,7 @@ function renderProtestData(payload) {
     const isSelected = Number.isFinite(featureId) && featureId === protestSelectedFeatureId;
     const marker = L.marker([lat, lng], {
       title: feature?.properties?.title || "Protesta",
-      icon: createProtestFireIcon(feature),
+      icon: createProtestCircleIcon(feature),
     });
     marker.bindTooltip(
       `${feature?.properties?.title || "Evento"} · ${

@@ -654,6 +654,7 @@ h3 {
 .protest-overlay {
   position: absolute;
   right: 16px;
+  top: 16px;
   bottom: 16px;
   width: min(360px, calc(100% - 32px));
   background: rgba(18, 13, 13, 0.95);
@@ -664,7 +665,7 @@ h3 {
   z-index: 955;
   display: grid;
   gap: 8px;
-  max-height: min(74vh, 620px);
+  max-height: none;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -836,19 +837,19 @@ h3 {
   font-size: 11px;
 }
 
-.protest-fire-icon-wrap {
+.protest-marker-icon-wrap {
   background: transparent;
   border: none;
 }
 
-.protest-fire-icon {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  font-size: 21px;
-  line-height: 1;
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 6px var(--protest-fire-color, #ef6c00));
+.protest-marker-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border-radius: 999px;
+  background: var(--protest-marker-color, #ef6c00);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 .pin-icon {
@@ -3381,6 +3382,7 @@ textarea {
 
   .protest-overlay {
     position: static;
+    top: auto;
     right: auto;
     bottom: auto;
     width: 100%;
