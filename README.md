@@ -83,6 +83,18 @@ La app estará en `http://localhost:8000`. Logs: `docker compose logs -f web`. P
 
 Para mapas self-hosted con tiles locales, ver [`README.maps-selfhosted.es.md`](README.maps-selfhosted.es.md).
 
+## Tests
+
+El proyecto incluye una suite de tests unitarios con pytest.
+
+```bash
+# Ejecutar todos los tests
+pytest
+
+# Con reporte de coverage
+pytest tests/unit/ -v --cov=app/services --cov-report=term-missing
+```
+
 ## Roles
 
 - **colaborador:** cuenta estándar, puede crear y editar reportes

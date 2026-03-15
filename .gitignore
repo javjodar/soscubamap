@@ -6,3 +6,4 @@ instance/
 .mypy_cache/
 .pytest_cache/
 .idea/
+/.coverage
