@@ -429,6 +429,31 @@ h3 {
   font-weight: 700;
 }
 
+.connectivity-window-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.connectivity-window-btn {
+  border: 1px solid rgba(214, 251, 231, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d6fbe7;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.connectivity-window-btn:hover {
+  border-color: rgba(214, 251, 231, 0.45);
+}
+
+.connectivity-window-btn.is-active {
+  background: rgba(110, 231, 183, 0.2);
+  border-color: rgba(110, 231, 183, 0.65);
+  color: #f3fff8;
+}
+
 .connectivity-legend-item {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -530,6 +555,94 @@ h3 {
 }
 
 .connectivity-traffic-note {
+  color: #9ec4b8;
+  font-size: 10px;
+}
+
+.connectivity-province-panel {
+  border-top: 1px solid rgba(214, 251, 231, 0.15);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.connectivity-province-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.connectivity-province-title {
+  color: #d6fbe7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.connectivity-province-clear {
+  border: 1px solid rgba(214, 251, 231, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d6fbe7;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.connectivity-province-status,
+.connectivity-province-range {
+  color: #b7ddd0;
+  font-size: 11px;
+}
+
+.connectivity-province-chart {
+  width: 100%;
+  height: 86px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(214, 251, 231, 0.12);
+}
+
+.connectivity-province-chart .spark-prev,
+.connectivity-province-chart .spark-main {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.connectivity-province-chart .spark-prev {
+  stroke: rgba(249, 168, 37, 0.8);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+}
+
+.connectivity-province-chart .spark-main {
+  stroke: #6ee7b7;
+  stroke-width: 2.2;
+}
+
+.connectivity-province-log {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.connectivity-province-log-item {
+  border: 1px solid rgba(214, 251, 231, 0.15);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  gap: 2px;
+  font-size: 10px;
+  color: #d6fbe7;
+}
+
+.connectivity-province-log-empty {
+  border: 1px dashed rgba(214, 251, 231, 0.25);
+  border-radius: 8px;
+  padding: 8px;
   color: #9ec4b8;
   font-size: 10px;
 }

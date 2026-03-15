@@ -136,6 +136,8 @@ CRON_TZ=UTC
 0 */2 * * * cd /ruta/soscubamap && /ruta/.venv/bin/python -m scripts.fetch_connectivity >> /var/log/soscubamap-connectivity.log 2>&1
 ```
 
+En el mapa, la capa `Conectividad` permite alternar ventana de análisis (`24h`, `6h`, `2h`) para recalcular colores por provincia usando snapshots recientes.
+
 Debug (solo admin autenticado):
 
 ```bash

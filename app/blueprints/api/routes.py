@@ -363,6 +363,35 @@ def _get_verified_post_ids(post_ids):
     return {row.target_id for row in rows}
 
 
+def _average_numeric(values):
+    numeric = [to_float(value) for value in (values or [])]
+    numeric = [value for value in numeric if value is not None]
+    if not numeric:
+        return None
+    return sum(numeric) / len(numeric)
+
+
+def _minimum_numeric(values):
+    numeric = [to_float(value) for value in (values or [])]
+    numeric = [value for value in numeric if value is not None]
+    if not numeric:
+        return None
+    return min(numeric)
+
+
+def _parse_connectivity_window_hours():
+    raw = (request.args.get("window_hours") or "").strip()
+    if not raw:
+        return 24
+    try:
+        value = int(raw)
+    except Exception:
+        return 24
+    if value in (2, 6, 24):
+        return value
+    return 24
+
+
 @api_bp.route("/health")
 def health():
     return jsonify({"status": "ok"})
@@ -374,11 +403,23 @@ def connectivity_latest():
     now = datetime.utcnow()
     stale_after_hours = int(current_app.config.get("CONNECTIVITY_STALE_AFTER_HOURS", 8))
     stale_threshold = timedelta(hours=max(stale_after_hours, 1))
+    window_hours = _parse_connectivity_window_hours()
+    window_start = now - timedelta(hours=window_hours)
+    window_aggregation = "worst"
 
     snapshot = (
         ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
         .order_by(ConnectivitySnapshot.observed_at_utc.desc(), ConnectivitySnapshot.id.desc())
         .first()
+    )
+    window_snapshots = (
+        ConnectivitySnapshot.query.options(selectinload(ConnectivitySnapshot.provinces))
+        .filter(
+            ConnectivitySnapshot.observed_at_utc >= window_start,
+            ConnectivitySnapshot.observed_at_utc <= now,
+        )
+        .order_by(ConnectivitySnapshot.observed_at_utc.asc(), ConnectivitySnapshot.id.asc())
+        .all()
     )
 
     geojson = load_province_geojson()
@@ -397,12 +438,18 @@ def connectivity_latest():
     partial = True
     snapshot_payload = None
     status_by_province = {}
+    window_payload = {
+        "hours": window_hours,
+        "aggregation": window_aggregation,
+        "start_utc": serialize_snapshot_time(window_start),
+        "end_utc": serialize_snapshot_time(now),
+        "snapshot_count": 0,
+        "national_score": None,
+        "national_status": STATUS_UNKNOWN,
+        "national_status_label": STATUS_LABELS.get(STATUS_UNKNOWN, "Sin datos"),
+    }
 
     if snapshot:
-        national_score = snapshot.score
-        national_status = score_to_status(snapshot.score)
-        national_confidence = snapshot.confidence or "country_level"
-        partial = bool(snapshot.is_partial)
         stale = not snapshot.fetched_at_utc or (now - snapshot.fetched_at_utc) > stale_threshold
         snapshot_payload = {
             "id": snapshot.id,
@@ -411,12 +458,66 @@ def connectivity_latest():
             "traffic_value": snapshot.traffic_value,
             "baseline_value": snapshot.baseline_value,
             "score": snapshot.score,
-            "status": national_status,
-            "status_label": STATUS_LABELS.get(national_status, STATUS_LABELS[STATUS_UNKNOWN]),
-            "is_partial": partial,
+            "status": score_to_status(snapshot.score),
+            "status_label": STATUS_LABELS.get(
+                score_to_status(snapshot.score), STATUS_LABELS[STATUS_UNKNOWN]
+            ),
+            "is_partial": bool(snapshot.is_partial),
             "stale": stale,
-            "confidence": national_confidence,
+            "confidence": snapshot.confidence or "country_level",
         }
+
+    if window_snapshots:
+        national_window_scores = [item.score for item in window_snapshots]
+        if window_aggregation == "worst":
+            national_score = _minimum_numeric(national_window_scores)
+        else:
+            national_score = _average_numeric(national_window_scores)
+
+        national_status = score_to_status(national_score)
+        national_confidence = "window_worst_country_level"
+        partial = bool(any(item.is_partial for item in window_snapshots))
+
+        province_score_map = {}
+        for snap in window_snapshots:
+            for row in snap.provinces:
+                province_score_map.setdefault(row.province, []).append(row.score)
+                province_names.add(row.province)
+
+        for province, scores in province_score_map.items():
+            if window_aggregation == "worst":
+                province_score = _minimum_numeric(scores)
+            else:
+                province_score = _average_numeric(scores)
+            status_key = score_to_status(province_score)
+            status_by_province[province] = {
+                "province": province,
+                "score": province_score,
+                "status": status_key,
+                "status_label": STATUS_LABELS.get(status_key, STATUS_LABELS[STATUS_UNKNOWN]),
+                "status_color": STATUS_COLORS.get(status_key, STATUS_COLORS[STATUS_UNKNOWN]),
+                "confidence": "window_worst_estimated_country_level",
+                "is_estimated": True,
+            }
+
+        window_payload.update(
+            {
+                "snapshot_count": len(window_snapshots),
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "latest_observed_at_utc": serialize_snapshot_time(
+                    window_snapshots[-1].observed_at_utc
+                ),
+            }
+        )
+    elif snapshot:
+        national_score = snapshot.score
+        national_status = score_to_status(snapshot.score)
+        national_confidence = snapshot.confidence or "country_level"
+        partial = bool(snapshot.is_partial)
 
         for row in snapshot.provinces:
             status_key = score_to_status(row.score)
@@ -430,6 +531,18 @@ def connectivity_latest():
                 "is_estimated": True,
             }
             province_names.add(row.province)
+
+        window_payload.update(
+            {
+                "snapshot_count": 1,
+                "national_score": national_score,
+                "national_status": national_status,
+                "national_status_label": STATUS_LABELS.get(
+                    national_status, STATUS_LABELS[STATUS_UNKNOWN]
+                ),
+                "latest_observed_at_utc": serialize_snapshot_time(snapshot.observed_at_utc),
+            }
+        )
 
     province_items = []
     for province in sorted(province_names):
@@ -459,6 +572,7 @@ def connectivity_latest():
             "has_geojson": bool((enriched_geojson.get("features") or [])),
             "provinces": province_items,
             "geojson": enriched_geojson,
+            "window": window_payload,
             "http_requests_24h": http_requests_24h,
             "source": {
                 "name": "Cloudflare Radar",

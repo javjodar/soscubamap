@@ -109,6 +109,11 @@
     <div class="map-hint" id="mapHint">Haz click en el mapa para crear un reporte</div>
     <div id="connectivityLegendOverlay" class="connectivity-legend-overlay" hidden>
       <div class="connectivity-legend-title">Conectividad</div>
+      <div class="connectivity-window-switch" role="group" aria-label="Ventana de conectividad">
+        <button type="button" class="connectivity-window-btn is-active" data-connectivity-window-hours="24" aria-pressed="true">24h</button>
+        <button type="button" class="connectivity-window-btn" data-connectivity-window-hours="6" aria-pressed="false">6h</button>
+        <button type="button" class="connectivity-window-btn" data-connectivity-window-hours="2" aria-pressed="false">2h</button>
+      </div>
       <div class="connectivity-legend-item">
         <span class="dot dot-normal"></span>
         <span>Normal</span>
@@ -127,7 +132,7 @@
       </div>
       <div class="connectivity-updated" id="connectivityUpdatedLabel"></div>
       <div class="connectivity-traffic-panel" id="connectivityTrafficPanel">
-        <div class="connectivity-traffic-title">Peticiones HTTP (ultimas 24h)</div>
+        <div class="connectivity-traffic-title">Peticiones HTTP (referencia 24h)</div>
         <div class="connectivity-traffic-kpi" id="connectivityTrafficValue">N/D</div>
         <div class="connectivity-traffic-meta">
           <span id="connectivityTrafficDelta">Variacion vs control: N/D</span>
@@ -144,6 +149,29 @@
           <path id="connectivitySparkMain" class="spark-main" d=""></path>
         </svg>
         <div class="connectivity-traffic-note" id="connectivityTrafficNote"></div>
+      </div>
+      <div class="connectivity-province-panel" id="connectivityProvincePanel">
+        <div class="connectivity-province-head">
+          <div class="connectivity-province-title" id="connectivityProvinceTitle">Selecciona una provincia</div>
+          <button type="button" class="connectivity-province-clear" id="connectivityProvinceClearBtn">Limpiar</button>
+        </div>
+        <div class="connectivity-province-status" id="connectivityProvinceStatus">
+          Haz clic en una provincia para ver detalle horario.
+        </div>
+        <div class="connectivity-province-range" id="connectivityProvinceRange"></div>
+        <svg
+          id="connectivityProvinceChart"
+          class="connectivity-province-chart"
+          viewBox="0 0 280 86"
+          preserveAspectRatio="none"
+          aria-label="Serie horaria de conectividad en provincia"
+        >
+          <path id="connectivityProvinceChartPrev" class="spark-prev" d=""></path>
+          <path id="connectivityProvinceChartMain" class="spark-main" d=""></path>
+        </svg>
+        <div class="connectivity-province-log" id="connectivityProvinceLog">
+          <div class="connectivity-province-log-empty">Sin provincia seleccionada.</div>
+        </div>
       </div>
       {% if current_user.is_authenticated and current_user.has_role('administrador') %}
         <div class="connectivity-source-credit">Hecho con tecnología de Cloudflare Radar</div>
