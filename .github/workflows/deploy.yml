@@ -38,4 +38,4 @@ jobs:
         run: |
           ssh -p "${{ vars.DO_SSH_PORT || 22 }}" \
             "${{ vars.DO_SSH_USER }}@${{ vars.DO_HOST }}" \
-            "bash /home/soscuba/soscubamap/deploy.sh"
+            "sudo -u soscuba git -C /home/soscuba/soscubamap pull && bash /home/soscuba/soscubamap/deploy.sh"
