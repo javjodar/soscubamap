@@ -18,11 +18,11 @@ jobs:
 
     steps:
       - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
         run: |
           install -m 700 -d ~/.ssh
-          cat <<'EOF' > ~/.ssh/id_ed25519
-          ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          EOF
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
       - name: Add server to known_hosts
