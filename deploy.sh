@@ -35,8 +35,9 @@ if [[ ! -d "${MIGRATIONS_DIR}" ]]; then
   exit 1
 fi
 
-echo "[1/4] Git pull"
-run_as_app_user git -C "${APP_DIR}" pull
+echo "[1/4] Sync git"
+run_as_app_user git -C "${APP_DIR}" fetch origin main
+run_as_app_user git -C "${APP_DIR}" reset --hard origin/main
 
 echo "[2/4] Dependencias"
 run_as_app_user "${APP_DIR}/.venv/bin/python" -m pip install -r "${APP_DIR}/requirements.txt"
