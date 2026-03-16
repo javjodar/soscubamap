@@ -4,6 +4,8 @@ set -euo pipefail
 APP_USER="soscuba"
 APP_DIR="/home/${APP_USER}/soscubamap"
 SERVICE_NAME="soscuba"
+FLASK_APP_PATH="${APP_DIR}/run.py"
+MIGRATIONS_DIR="${APP_DIR}/migrations"
 
 run_as_app_user() {
   if [[ $EUID -eq 0 ]]; then
@@ -23,13 +25,30 @@ if [[ ! -x "${APP_DIR}/.venv/bin/flask" ]]; then
   exit 1
 fi
 
-echo "[1/3] Git pull"
+if [[ ! -f "${APP_DIR}/requirements.txt" ]]; then
+  echo "No existe requirements.txt en ${APP_DIR}" >&2
+  exit 1
+fi
+
+if [[ ! -d "${MIGRATIONS_DIR}" ]]; then
+  echo "No existe el directorio de migraciones en ${MIGRATIONS_DIR}" >&2
+  exit 1
+fi
+
+echo "[1/4] Git pull"
 run_as_app_user git -C "${APP_DIR}" pull
 
-echo "[2/3] Migraciones"
-run_as_app_user "${APP_DIR}/.venv/bin/flask" --app run.py db upgrade
+echo "[2/4] Dependencias"
+run_as_app_user "${APP_DIR}/.venv/bin/python" -m pip install -r "${APP_DIR}/requirements.txt"
 
-echo "[3/3] Reinicio de servicio"
+echo "[3/4] Migraciones"
+if [[ $EUID -eq 0 ]]; then
+  sudo -u "${APP_USER}" bash -lc "cd '${APP_DIR}' && '${APP_DIR}/.venv/bin/flask' --app '${FLASK_APP_PATH}' db upgrade -d '${MIGRATIONS_DIR}'"
+else
+  (cd "${APP_DIR}" && "${APP_DIR}/.venv/bin/flask" --app "${FLASK_APP_PATH}" db upgrade -d "${MIGRATIONS_DIR}")
+fi
+
+echo "[4/4] Reinicio de servicio"
 if [[ $EUID -eq 0 ]]; then
   systemctl restart "${SERVICE_NAME}"
 else
