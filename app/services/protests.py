@@ -148,9 +148,63 @@ def _csv_env_list(value, defaults=None):
     return items or list(defaults or [])
 
 
+def _dedupe_urls(urls):
+    result = []
+    seen = set()
+    for raw_url in urls or []:
+        text = str(raw_url or "").strip()
+        if not text:
+            continue
+        canonical = canonicalize_source_url(text) or text
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        result.append(text)
+    return result
+
+
+def _feed_urls_from_json_payload(payload):
+    if isinstance(payload, dict):
+        items = payload.get("feeds")
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        items = []
+    if not isinstance(items, list):
+        return []
+    return _dedupe_urls([str(item or "").strip() for item in items if str(item or "").strip()])
+
+
+def _load_rss_feed_urls_from_json():
+    json_path = str(
+        _get_env_or_config("PROTEST_RSS_FEEDS_JSON_PATH", "app/static/data/protest_feeds.json")
+        or ""
+    ).strip()
+    if not json_path:
+        return []
+    resolved = _resolve_path(json_path)
+    if not resolved or not os.path.exists(resolved):
+        return []
+    try:
+        with open(resolved, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return []
+    return _feed_urls_from_json_payload(payload)
+
+
 def get_rss_feed_urls():
-    raw = _get_env_or_config("PROTEST_RSS_FEEDS", "")
-    return _csv_env_list(raw)
+    # JSON-only: lista de feeds gestionada en archivo para evitar
+    # problemas de parseo/sobrescritura en .env.
+    return _dedupe_urls(_load_rss_feed_urls_from_json())
+
+
+def get_fetch_interval_seconds():
+    raw = _get_env_or_config("PROTEST_FETCH_INTERVAL_SECONDS", "300")
+    try:
+        return max(60, int(raw))
+    except Exception:
+        return 300
 
 
 def get_fetch_timeout_seconds():

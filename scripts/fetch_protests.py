@@ -1,5 +1,6 @@
 import argparse
 import json
+import time
 
 import requests
 
@@ -9,6 +10,7 @@ from app.models.protest_event import ProtestEvent
 from app.models.protest_ingestion_run import ProtestIngestionRun
 from app.services.protests import (
     build_event_payload,
+    get_fetch_interval_seconds,
     get_fetch_timeout_seconds,
     get_rss_feed_urls,
     parse_feed_payload,
@@ -23,6 +25,23 @@ def parse_args():
         action="append",
         default=[],
         help="Feed RSS especifico. Se puede repetir para varios feeds.",
+    )
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Ejecuta ingesta continua con intervalo fijo.",
+    )
+    parser.add_argument(
+        "--interval-seconds",
+        type=int,
+        default=None,
+        help="Intervalo entre ingestas cuando se usa --loop (minimo 60).",
+    )
+    parser.add_argument(
+        "--max-runs",
+        type=int,
+        default=0,
+        help="Cantidad maxima de ciclos cuando se usa --loop (0 = infinito).",
     )
     return parser.parse_args()
 
@@ -142,7 +161,7 @@ def run_ingestion(feeds):
         if not feed_urls:
             feed_urls = get_rss_feed_urls()
         if not feed_urls:
-            raise RuntimeError("PROTEST_RSS_FEEDS no configurado")
+            raise RuntimeError("No hay feeds RSS configurados en PROTEST_RSS_FEEDS_JSON_PATH")
 
         timeout_seconds = get_fetch_timeout_seconds()
         run = ProtestIngestionRun(
@@ -256,8 +275,64 @@ def run_ingestion(feeds):
             raise
 
 
+def run_scheduler(feeds, interval_seconds=None, max_runs=0):
+    interval = max(60, int(interval_seconds or get_fetch_interval_seconds()))
+    run_count = 0
+    print(
+        "SCHEDULER",
+        json.dumps(
+            {
+                "interval_seconds": interval,
+                "max_runs": int(max_runs or 0),
+                "mode": "loop",
+            },
+            ensure_ascii=False,
+        ),
+    )
+    while True:
+        run_count += 1
+        started = time.monotonic()
+        try:
+            run_ingestion(feeds)
+        except Exception as exc:
+            print(
+                "ERROR",
+                json.dumps(
+                    {
+                        "run_number": run_count,
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
+        if max_runs and run_count >= int(max_runs):
+            break
+
+        elapsed = time.monotonic() - started
+        sleep_seconds = max(5, int(interval - elapsed))
+        print(
+            "SLEEP",
+            json.dumps(
+                {
+                    "run_number": run_count,
+                    "sleep_seconds": sleep_seconds,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        time.sleep(sleep_seconds)
+
+
 def main():
     args = parse_args()
+    if args.loop:
+        run_scheduler(
+            args.feed or [],
+            interval_seconds=args.interval_seconds,
+            max_runs=args.max_runs,
+        )
+        return
     run_ingestion(args.feed or [])
 
 

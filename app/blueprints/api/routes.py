@@ -59,6 +59,7 @@ from app.services.geo_lookup import list_provinces
 from app.services.cuba_locations import PROVINCES
 from app.services.protests import (
     display_source_name as protest_display_source_name,
+    get_rss_feed_urls as protest_rss_feed_urls,
     get_frontend_refresh_seconds as protest_frontend_refresh_seconds,
     get_min_confidence_to_show as protest_min_confidence_to_show,
 )
@@ -1427,13 +1428,17 @@ def protests_debug():
         {
             "generated_at_utc": serialize_snapshot_time(datetime.utcnow()),
             "config": {
-                "protest_rss_feeds": [
-                    item.strip()
-                    for item in str(current_app.config.get("PROTEST_RSS_FEEDS", "") or "").split(",")
-                    if item.strip()
-                ],
+                "protest_rss_feeds": protest_rss_feed_urls(),
+                "protest_rss_feeds_mode": "json_only",
+                "protest_rss_feeds_json_path": current_app.config.get(
+                    "PROTEST_RSS_FEEDS_JSON_PATH",
+                    "app/static/data/protest_feeds.json",
+                ),
                 "protest_fetch_timeout_seconds": int(
                     current_app.config.get("PROTEST_FETCH_TIMEOUT_SECONDS", 30)
+                ),
+                "protest_fetch_interval_seconds": int(
+                    current_app.config.get("PROTEST_FETCH_INTERVAL_SECONDS", 300)
                 ),
                 "protest_frontend_refresh_seconds": protest_frontend_refresh_seconds(),
                 "protest_min_confidence_to_show": protest_min_confidence_to_show(),
