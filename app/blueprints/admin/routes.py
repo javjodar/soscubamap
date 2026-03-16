@@ -285,7 +285,13 @@ def protests_set_visibility(event_id):
     if action == "approve":
         event.visible_on_map = True
         event.review_status = "approved_manual"
-        flash("Evento de protesta aprobado manualmente y publicado en mapa.", "success")
+        if event.latitude is None or event.longitude is None:
+            flash(
+                "Evento aprobado manualmente. Sin coordenadas aún: no se dibujará en el mapa hasta resolver ubicación.",
+                "warning",
+            )
+        else:
+            flash("Evento de protesta aprobado manualmente y publicado en mapa.", "success")
     elif action == "hide":
         event.visible_on_map = False
         event.review_status = "hidden_manual"

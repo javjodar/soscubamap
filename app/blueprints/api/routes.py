@@ -67,7 +67,7 @@ from app.services.protests import (
 from app.models.post import Post
 from sqlalchemy.orm import selectinload
 from app.models.category import Category
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from . import api_bp
 
 
@@ -1241,7 +1241,12 @@ def protests_geojson():
         ProtestEvent.source_url.isnot(None),
         ProtestEvent.source_url != "",
     )
-    base_query = base_query.filter(ProtestEvent.confidence_score >= min_confidence)
+    base_query = base_query.filter(
+        or_(
+            ProtestEvent.review_status == "approved_manual",
+            ProtestEvent.confidence_score >= min_confidence,
+        )
+    )
 
     if province:
         base_query = base_query.filter(ProtestEvent.matched_province == province)

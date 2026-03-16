@@ -107,6 +107,10 @@ def _upsert_event(payload):
     existing = _find_existing_event(payload)
     if existing:
         changed = False
+        manual_locked = (existing.review_status or "").strip().lower() in {
+            "approved_manual",
+            "hidden_manual",
+        }
         updatable_fields = [
             "source_feed",
             "source_name",
@@ -138,6 +142,9 @@ def _upsert_event(payload):
             "transparency_note",
         ]
         for field in updatable_fields:
+            if manual_locked and field in {"review_status", "visible_on_map"}:
+                # Respeta la decisión manual del admin aunque cambie la heurística automática.
+                continue
             new_value = payload.get(field)
             if getattr(existing, field) != new_value:
                 setattr(existing, field, new_value)
