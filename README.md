@@ -95,8 +95,8 @@ pytest
 pytest tests/unit/ -v --cov=app/services --cov-report=term-missing
 ```
 
-## Roles
-
+## Roles   
+        
 - **colaborador:** cuenta estándar, puede crear y editar reportes
 - **moderador:** revisa reportes pendientes y solicitudes de edición
 - **administrador:** gestiona usuarios, ajustes, donaciones, y tiene acceso completo
